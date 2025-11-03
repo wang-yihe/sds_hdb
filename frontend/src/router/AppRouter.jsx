@@ -1,6 +1,8 @@
 import {Navigate, Route, Routes} from "react-router-dom"
 import MainLayout from "@/layout/MainLayout"
 import LoginLayout from "@/layout/LoginLayout"
+import ProtectedRoute from "@/auth/ProtectedRoute"
+import PublicRoute from "@/auth/PublicRoute"
 import Canvas from "@/components/pages/canvas"
 
 const AppRouter = () => {
@@ -14,7 +16,7 @@ const AppRouter = () => {
             <Route element = {<ProtectedRoute />}>
                 <Route element = {<MainLayout />}>
                     <Route path = "/" element = {<Navigate to ="/login" replace />} />
-                    <Route path = "/canvas" element = {<canvas />} />
+                    <Route path = "/Canvas" element = {<Canvas />} />
                 </Route>
             </Route>
         </Routes>
