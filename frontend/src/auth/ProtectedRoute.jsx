@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { useAppSelector } from '@/hooks/redux';
 import { useSelector } from 'react-redux';
 import { Navigate, Outlet } from 'react-router-dom';
 
