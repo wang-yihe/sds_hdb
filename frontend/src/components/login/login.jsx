@@ -14,12 +14,10 @@ const Login = () => {
                     <img src="/logo.png" alt="Logo" className="w-full h-auto" />
                 </div>
                 <h2 className="font-bold text-xl capitalize animate-bounce">
-                    Welcome to User Management System
+                    Welcome to SDS-HDB combined workspace
                 </h2>
                 <h5 className="text-xs text-black/50 font-bold">
-                    Our system is designed to streamline user management operations, 
-                    ensuring businesses can efficiently manage, coordinate and track 
-                    various user activities and permissions.
+                    Still a WIP thanks
                 </h5>
             </div>
             
@@ -28,16 +26,12 @@ const Login = () => {
                 <div className="hidden lg:flex w-1/2 justify-self-center">
                     <img src="/welcome.png" alt="Welcome" className="w-full h-auto" />
                 </div>
-                
-                <form 
-                    onSubmit={handleSubmit(handleLogin)} 
-                    className="w-full grid grid-cols-1 gap-3 justify-center p-5 border shadow-lg"
-                >
+
+                <form onSubmit={handleSubmit(handleLogin)} className="w-full grid grid-cols-1 gap-3 justify-center p-5 border shadow-lg">
                     {/* Email Field */}
                     <div className="grid w-full items-center gap-1.5">
                         <Label htmlFor="email">Email *</Label>
-                        <Input
-                            id="email"
+                        <Input id="email"
                             {...register('email', { 
                                 required: 'Email is required',
                                 pattern: {
