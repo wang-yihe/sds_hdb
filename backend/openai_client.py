@@ -79,3 +79,27 @@ def gpt_image_generate(
     if not r.ok:
         _raise_with_body(r)
     return r.json()["data"][0]["b64_json"]
+
+
+# === Vision (GPT-4o/mini) to READ images and return text ===
+def gpt_vision_summarize(messages: list, model: str = "gpt-4o-mini", max_tokens: int = 700) -> str:
+    """
+    Sends a Chat Completions request using GPT-4o-mini (vision enabled).
+    `messages` must follow the ChatGPT format with 'role' and 'content'.
+    'content' can contain text or images: 
+    { "type": "image_url", "image_url": {"url": "data:image/png;base64,..."} }
+    """
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = _get_headers()  # existing helper
+    payload = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+    }
+    r = requests.post(url, headers=headers, json=payload, timeout=600)
+    if not r.ok:
+        _raise_with_body(r)
+    return r.json()["choices"][0]["message"]["content"]
+
+def b64_to_data_url(b64: str, mime: str = "image/png") -> str:
+    return f"data:{mime};base64,{b64}"
