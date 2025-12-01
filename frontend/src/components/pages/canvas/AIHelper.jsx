@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { Tldraw } from "tldraw";
-import "tldraw/tldraw.css";
 
-const Canvas = () => {
+const AIHelper = (props) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [styleImage, setStyleImage] = useState(null);
   const [perspectiveImage, setPerspectiveImage] = useState(null);
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [selectedPlants, setSelectedPlants] = useState([]);
+  const [plantSearch, setPlantSearch] = useState("");
 
   const handleImageUpload = (e, type) => {
     const file = e.target.files?.[0];
@@ -24,24 +24,51 @@ const Canvas = () => {
     }
   };
 
+  const handlePlantSelect = (plant) => {
+    if (selectedPlants.includes(plant)) {
+      setSelectedPlants(selectedPlants.filter(p => p !== plant));
+    } else {
+      setSelectedPlants([...selectedPlants, plant]);
+    }
+  };
+
   const handleGenerate = async () => {
+    if (!styleImage || !perspectiveImage) {
+      alert('Please upload both style reference and perspective view images');
+      return;
+    }
+
     setIsGenerating(true);
     try {
-      // TODO: Call your AI API here
-      console.log('Generating with:', {
+      const generationData = {
         styleImage,
         perspectiveImage,
-        prompt
-      });
+        prompt,
+        selectedPlants
+      };
+
+      // Call parent component's onGenerate callback
+      if (props.onGenerate) {
+        props.onGenerate(generationData);
+      }
+
+      // TODO: Call your AI API here
+      console.log('Generating with:', generationData);
       
       // Example API call:
       // const response = await fetch('/api/generate', {
       //   method: 'POST',
-      //   body: JSON.stringify({ styleImage, perspectiveImage, prompt })
+      //   body: JSON.stringify(generationData)
       // });
       
-      alert('AI generation triggered! Check console for data.');
       setIsModalOpen(false);
+      
+      // Reset form
+      setStyleImage(null);
+      setPerspectiveImage(null);
+      setPrompt("");
+      setSelectedPlants([]);
+      setPlantSearch("");
     } catch (error) {
       console.error('Generation failed:', error);
       alert('Failed to generate image');
@@ -51,19 +78,15 @@ const Canvas = () => {
   };
 
   return (
-    <div style={{ position: 'relative', inset: 0, width: '100vw', height: '100vh' }}>
-      {/* Tldraw Canvas */}
-      <Tldraw />
-
+    <>
       {/* AI Helper Button */}
       <button
         onClick={() => setIsModalOpen(true)}
         style={{
           position: 'absolute',
           bottom: '16px',
-          left: '480px',
-          width: '48px',
-          height: '48px',
+          right: '16px',
+          padding: '12px 20px',
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
           border: 'none',
           borderRadius: '8px',
@@ -71,7 +94,7 @@ const Canvas = () => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: '24px',
+          gap: '8px',
           boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)',
           transition: 'transform 0.2s, box-shadow 0.2s',
           zIndex: 1000
@@ -84,9 +107,12 @@ const Canvas = () => {
           e.currentTarget.style.transform = 'scale(1)';
           e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
         }}
-        title="AI Helper"
+        title="AI Planting Visualiser"
       >
-        ✨
+        <span style={{ fontSize: '20px' }}>✨</span>
+        <span style={{ fontSize: '14px', fontWeight: '600', color: 'white', whiteSpace: 'nowrap' }}>
+          AI Planting Visualiser
+        </span>
       </button>
 
       {/* AI Helper Modal */}
@@ -140,7 +166,7 @@ const Canvas = () => {
             {/* Style Reference Upload */}
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
-                📷 Style Reference (Optional)
+                📷 Style Reference *
               </label>
               <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                 <label style={{ 
@@ -176,7 +202,7 @@ const Canvas = () => {
             {/* Perspective View Upload */}
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
-                🏠 Perspective View (Optional)
+                🏠 Perspective View *
               </label>
               <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                 <label style={{ 
@@ -209,10 +235,125 @@ const Canvas = () => {
               </div>
             </div>
 
+            {/* Plant Suggestions Section */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                🌿 Suggested Plants
+              </label>
+              
+              {/* Search Bar */}
+              <div style={{ marginBottom: '12px' }}>
+                <input
+                  type="text"
+                  value={plantSearch}
+                  onChange={(e) => setPlantSearch(e.target.value)}
+                  placeholder="Search for plants..."
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #d1d5db',
+                    fontSize: '14px',
+                    outline: 'none'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                  onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                />
+              </div>
+
+              {/* Selected Plants Display */}
+              {selectedPlants.length > 0 && (
+                <div style={{ marginBottom: '12px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {selectedPlants.map((plant, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        padding: '6px 12px',
+                        background: '#3b82f6',
+                        color: 'white',
+                        borderRadius: '16px',
+                        fontSize: '13px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      {plant}
+                      <button
+                        onClick={() => handlePlantSelect(plant)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'white',
+                          cursor: 'pointer',
+                          fontSize: '16px',
+                          padding: '0',
+                          lineHeight: '1'
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Suggested Plants Grid */}
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', 
+                gap: '12px',
+                maxHeight: '200px',
+                overflowY: 'auto',
+                padding: '8px',
+                background: '#f9fafb',
+                borderRadius: '8px',
+                border: '1px solid #e5e7eb'
+              }}>
+                {/* Placeholder plants - will be replaced with RAG model data */}
+                {['Monstera', 'Pothos', 'Snake Plant', 'Peace Lily', 'Fiddle Leaf Fig', 'Spider Plant']
+                  .filter(plant => plant.toLowerCase().includes(plantSearch.toLowerCase()))
+                  .map((plant, index) => {
+                    const isSelected = selectedPlants.includes(plant);
+                    return (
+                      <div
+                        key={index}
+                        onClick={() => handlePlantSelect(plant)}
+                        style={{
+                          padding: '12px',
+                          background: isSelected ? '#3b82f6' : 'white',
+                          borderRadius: '6px',
+                          border: `2px solid ${isSelected ? '#3b82f6' : '#e5e7eb'}`,
+                          cursor: 'pointer',
+                          textAlign: 'center',
+                          fontSize: '13px',
+                          transition: 'all 0.2s',
+                          color: isSelected ? 'white' : '#374151'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isSelected) {
+                            e.currentTarget.style.borderColor = '#3b82f6';
+                            e.currentTarget.style.background = '#eff6ff';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isSelected) {
+                            e.currentTarget.style.borderColor = '#e5e7eb';
+                            e.currentTarget.style.background = 'white';
+                          }
+                        }}
+                      >
+                        🌱 {plant}
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+
             {/* Prompt Input */}
             <div style={{ marginBottom: '24px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
-                💬 Prompt *
+                💬 Prompt (Optional)
               </label>
               <textarea
                 value={prompt}
@@ -253,14 +394,14 @@ const Canvas = () => {
               </button>
               <button
                 onClick={handleGenerate}
-                disabled={isGenerating || !prompt}
+                disabled={isGenerating || !styleImage || !perspectiveImage}
                 style={{
                   padding: '10px 24px',
-                  background: isGenerating || !prompt ? '#9ca3af' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  background: isGenerating || !styleImage || !perspectiveImage ? '#9ca3af' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
-                  cursor: isGenerating || !prompt ? 'not-allowed' : 'pointer',
+                  cursor: isGenerating || !styleImage || !perspectiveImage ? 'not-allowed' : 'pointer',
                   fontSize: '14px',
                   fontWeight: '500',
                   display: 'flex',
@@ -274,8 +415,8 @@ const Canvas = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 
-export default Canvas;
+export default AIHelper;
