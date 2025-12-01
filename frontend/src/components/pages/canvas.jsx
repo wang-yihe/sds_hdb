@@ -51,7 +51,7 @@ const Canvas = () => {
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh' }}>
+    <div style={{ position: 'relative', inset: 0, width: '100vw', height: '100vh' }}>
       {/* Tldraw Canvas */}
       <Tldraw />
 
