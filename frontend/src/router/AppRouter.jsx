@@ -5,6 +5,7 @@ import LoginLayout from "@/layout/LoginLayout"
 import ProtectedRoute from "@/auth/ProtectedRoute"
 import PublicRoute from "@/auth/PublicRoute"
 import Canvas from "@/components/pages/canvas"
+import TestCanvas from "@/components/pages/test-canvas"
 import User from "@/components/pages/user"
 
 const AppRouter = () => {
@@ -17,11 +18,18 @@ const AppRouter = () => {
             </Route>
             <Route element = {<ProtectedRoute />}>
                 <Route element = {<MainLayout />}>
+<<<<<<< HEAD
                     <Route path = "/" element = {<Navigate to ="/login" replace />} />
                     <Route path = "/canvas" element = {<Canvas />} />
                     <Route path = "/user" element = {<User />} />
+=======
+                    <Route path = "/users" element = {<User />} />
+>>>>>>> 6a1d3455bde040e74b092e4593452d694f39ba55
                 </Route>
             </Route>
+            {/* Temporary: Canvas accessible without login */}
+            <Route path = "/" element = {<Canvas />} />
+            <Route path = "/canvas" element = {<Canvas />} />
         </Routes>
     )
 }
