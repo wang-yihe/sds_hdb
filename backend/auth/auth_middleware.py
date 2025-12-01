@@ -3,10 +3,12 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 import os
 
+from core.config import get_settings
+
 # Configuration
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your_secret_key")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+SECRET_KEY = get_settings().secret_key
+ALGORITHM = get_settings().algorithm
+ACCESS_TOKEN_EXPIRE_MINUTES = get_settings().access_token_expire_minutes
 
 # Security scheme for extracting Bearer token
 security = HTTPBearer()

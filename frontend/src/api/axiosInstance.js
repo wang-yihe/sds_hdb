@@ -11,7 +11,7 @@ export const axiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use((config) => {
     store.dispatch(showGlobalLoader());
-    const token = store.getState().auth.token;
+    const token = store.getState().auth.access_token;
     if(token) {
         config.headers.Authorization = `Bearer ${token}`;
     }

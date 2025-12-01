@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     mongodb_server_selection_timeout: int = 5000  # milliseconds
 
     # JWT Authentication
-    secret_key: str = "your-secret-key-change-this-in-production-min-32-chars"
+    secret_key: str = "your-secret-key"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
