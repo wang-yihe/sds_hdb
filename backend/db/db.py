@@ -1,17 +1,18 @@
 from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient   
-import os
 
 #import models
-from models.user import User
-from models.canvas import Canvas
+from models.user_model import User
+# from models.canvas import Canvas
 
-MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
-DATABASE_NAME = os.getenv("DATABASE_NAME", "user_management_db")
+from core.config import get_settings
+
+MONGODB_URL = get_settings().mongodb_url
+DATABASE_NAME = get_settings().database_name
 
 document_models = [
     User,
-    Canvas,
+    #Canvas,
     ]
 
 #Connection functions
@@ -42,6 +43,6 @@ async def close_db_connection():
         
 class DB: 
     User = User
-    Canvas = Canvas
+    # Canvas = Canvas
     
 db = DB()

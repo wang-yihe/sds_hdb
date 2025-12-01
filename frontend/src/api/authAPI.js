@@ -3,7 +3,7 @@ import { axiosInstance } from "@/api/axiosInstance";
 const loginUser = async (userForm) => {
     try {
         const response = await axiosInstance.post("/auth/login", userForm);
-        return response.data;
+        return response;
     } catch (error) {
         const errorMessage = error?.response?.data?.message || error.message || error;
         throw new Error(errorMessage);
@@ -13,7 +13,7 @@ const loginUser = async (userForm) => {
 const validateToken = async () => {
     try {
         const response = await axiosInstance.get("/auth/validate");
-        return response.data;
+        return response;
     } catch (error) {
         const errorMessage = error?.response?.data?.message || error.message || error;
         throw new Error(errorMessage);

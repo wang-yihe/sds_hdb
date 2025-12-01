@@ -42,7 +42,7 @@ async def authenticate_jwt(
     
     try:
         decoded = verify_token(token)
-        return decoded  # This is like req.user in Express
+        return decoded  
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

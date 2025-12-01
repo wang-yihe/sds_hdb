@@ -9,8 +9,7 @@ const initialState = {
   },
 };
 
-// GET all users
-export const findAllUsers = createAsyncThunk("user/find-all", async (_, { rejectWithValue }) => {
+export const findAllUsers = createAsyncThunk("user/get_all_users", async (_, { rejectWithValue }) => {
   try {
     const { data } = await userAPI.findAllUser();
     return data;
@@ -20,8 +19,7 @@ export const findAllUsers = createAsyncThunk("user/find-all", async (_, { reject
   }
 });
 
-// CREATE user
-export const createUser = createAsyncThunk("user/create", async (userData, { rejectWithValue }) => {
+export const createUser = createAsyncThunk("user/create_user", async (userData, { rejectWithValue }) => {
   try {
     const { data } = await userAPI.createUser(userData);
     return data;
@@ -31,11 +29,20 @@ export const createUser = createAsyncThunk("user/create", async (userData, { rej
   }
 });
 
-// DELETE user
-export const deleteUser = createAsyncThunk("user/delete", async (id, { rejectWithValue }) => {
+export const updateUser = createAsyncThunk("user/update_user", async ({ id, userData }, { rejectWithValue }) => {
+  try {
+    const { data } = await userAPI.updateUser(id, userData);
+    return data;
+  } catch (error) {
+    const msg = error?.message || String(error);
+    return rejectWithValue(msg);
+  }
+});
+
+export const deleteUser = createAsyncThunk("user/delete_user", async (id, { rejectWithValue }) => {
   try {
     await userAPI.deleteUser(id);
-    return id; // Return the ID so we can remove it from the list
+    return id; 
   } catch (error) {
     const msg = error?.message || String(error);
     return rejectWithValue(msg);
@@ -48,7 +55,6 @@ const userSlice = createSlice({
   reducers: {},
   extraReducers: (builder) => {
     builder
-      // Find All Users
       .addCase(findAllUsers.pending, (state) => {
         state.loadingFlags.isAwaitingResponse = true;
       })
@@ -72,12 +78,26 @@ const userSlice = createSlice({
         state.loadingFlags.isSaving = false;
       })
 
+      // Update User
+      .addCase(updateUser.pending, (state) => {
+        state.loadingFlags.isSaving = true;
+      })
+      .addCase(updateUser.fulfilled, (state, action) => {
+        const index = state.userList.findIndex(user => user.id === action.payload.id);
+        if (index !== -1) {
+          state.userList[index] = action.payload; // Update user in the list
+        }
+        state.loadingFlags.isSaving = false;
+      })
+      .addCase(updateUser.rejected, (state) => {
+        state.loadingFlags.isSaving = false;
+      })
+      
       // Delete User
       .addCase(deleteUser.pending, (state) => {
         state.loadingFlags.isSaving = true;
       })
       .addCase(deleteUser.fulfilled, (state, action) => {
-        // Remove user from list by filtering out the deleted ID
         state.userList = state.userList.filter(user => user.id !== action.payload);
         state.loadingFlags.isSaving = false;
       })

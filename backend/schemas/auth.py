@@ -5,20 +5,12 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
-class RegisterRequest(BaseModel):
-    """Register request body"""
-    name: str
-    email: EmailStr
-    password: str
-    role_id: str | None = None
-
 class UserResponse(BaseModel):
     """User response model"""
     id: str
     name: str
     email: str
     is_active: bool
-    role_name: str | None
 
 class LoginResponse(BaseModel):
     """Login response with token"""

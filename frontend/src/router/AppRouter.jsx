@@ -19,7 +19,7 @@ const AppRouter = () => {
                 <Route element = {<MainLayout />}>
                     <Route path = "/" element = {<Navigate to ="/login" replace />} />
                     <Route path = "/canvas" element = {<Canvas />} />
-                    <Route path = "/users" element = {<User />} />
+                    <Route path = "/user" element = {<User />} />
                 </Route>
             </Route>
         </Routes>

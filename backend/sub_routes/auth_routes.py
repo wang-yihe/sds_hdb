@@ -1,20 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-
+from controllers.user_controller import UserController
 from auth.auth_middleware import authenticate_jwt
 from auth.auth_strategy import (
     authenticate_user,
-    hash_password,
     create_access_token
 )
 from db.db import db
 
-from models.auth import ( 
+from schemas.auth import ( 
     LoginRequest,
-    RegisterRequest,
     UserResponse,
     LoginResponse,
     TokenValidationResponse
 )
+
+from schemas.user_schema import UserCreate
 
 app = APIRouter()
 
@@ -28,7 +28,6 @@ async def login(credentials: LoginRequest):
     access_token = create_access_token({
         "id": user_data["id"],
         "email": user_data["email"],
-        "role_id": user_data.get("role_id")
     })
     
     return LoginResponse(
@@ -38,7 +37,7 @@ async def login(credentials: LoginRequest):
     )
 
 @app.post("/register", response_model=UserResponse, status_code=201)
-async def register_user(data: RegisterRequest):
+async def register_user(data: UserCreate):
 
     existing_user = await db.User.find_one(db.User.email == data.email)
     if existing_user:
@@ -47,22 +46,13 @@ async def register_user(data: RegisterRequest):
             detail="Email already registered"
         )
     
-    user = db.User(
-        name=data.name,
-        email=data.email,
-        password_hash=hash_password(data.password),  
-        role_id=data.role_id,
-        is_active=True
-    )
-    
-    await user.insert()
-    
+    user = await UserController.create_user(user_data = data)
+        
     return UserResponse(
         id=str(user.id),
         name=user.name,
         email=user.email,
-        is_active=user.is_active,
-        role_name=user.role_name
+        is_active=user.is_active
     )
 
 # ==================== PROTECTED ROUTES ====================
@@ -82,16 +72,11 @@ async def validate_token(current_user: dict = Depends(authenticate_jwt)):
             name=user.name,
             email=user.email,
             is_active=user.is_active,
-            role_name=user.role_name
         )
     )
 
 @app.get("/current_user", response_model=UserResponse)
 async def get_current_user_info(current_user: dict = Depends(authenticate_jwt)):
-    """
-    Get current authenticated user's information
-    Uses middleware.authenticate_jwt()
-    """
     user = await db.User.get(current_user["id"])
     
     if not user:
@@ -105,7 +90,6 @@ async def get_current_user_info(current_user: dict = Depends(authenticate_jwt)):
         name=user.name,
         email=user.email,
         is_active=user.is_active,
-        role_name=user.role_name
     )
 
 @app.post("/logout")

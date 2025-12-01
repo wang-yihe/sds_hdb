@@ -1,6 +1,6 @@
 import { useSelector, useDispatch } from "react-redux";
 import { useForm } from "react-hook-form";
-import { findAllUsers, createUser, deleteUser } from "@/store/slices/userSlice";
+import { findAllUsers, createUser, updateUser, deleteUser } from "@/store/slices/userSlice";
 
 const useUser = () => {
     const dispatch = useDispatch();

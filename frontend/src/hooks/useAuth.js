@@ -1,4 +1,3 @@
-// useAuth.js
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -19,9 +18,8 @@ const useAuth = () => {
 
     const handleLogin = async (data) => {
         try {
-            const resultAction = await dispatch(loginUser(data));
-            unwrapResult(resultAction);
-            navigate("/dashboard");
+            const resultAction = await dispatch(loginUser(data)).unwrap();
+            navigate("/user");
             alert(`Welcome ${data.email}!`);
         } catch (error) {
             alert("Login failed: " + (error.message || error));
