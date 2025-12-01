@@ -18,13 +18,9 @@ const AppRouter = () => {
             </Route>
             <Route element = {<ProtectedRoute />}>
                 <Route element = {<MainLayout />}>
-<<<<<<< HEAD
                     <Route path = "/" element = {<Navigate to ="/login" replace />} />
                     <Route path = "/canvas" element = {<Canvas />} />
                     <Route path = "/user" element = {<User />} />
-=======
-                    <Route path = "/users" element = {<User />} />
->>>>>>> 6a1d3455bde040e74b092e4593452d694f39ba55
                 </Route>
             </Route>
             {/* Temporary: Canvas accessible without login */}
