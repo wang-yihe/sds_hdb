@@ -3,7 +3,6 @@ import { Tldraw } from "tldraw";
 import "tldraw/tldraw.css";
 import AIHelper from "./AIHelper";
 import GenerationCard from "./GenerationCard";
-import OriginalCard from "./OriginalCard";
 
 const Canvas = () => {
   const [generations, setGenerations] = useState([]);
@@ -72,21 +71,13 @@ const Canvas = () => {
 
       {/* Generation Cards - Rendered on canvas */}
       {generations.map((gen) => (
-        gen.type === 'original' ? (
-          <OriginalCard
-            key={gen.id}
-            data={gen}
-            onDrag={(newPosition) => handleCardDrag(gen.id, newPosition)}
-          />
-        ) : (
-          <GenerationCard
-            key={gen.id}
-            data={gen}
-            onLike={() => handleLike(gen.id)}
-            onComment={(comment) => handleComment(gen.id, comment)}
-            onDrag={(newPosition) => handleCardDrag(gen.id, newPosition)}
-          />
-        )
+        <GenerationCard
+          key={gen.id}
+          data={gen}
+          onLike={() => handleLike(gen.id)}
+          onComment={(comment) => handleComment(gen.id, comment)}
+          onDrag={(newPosition) => handleCardDrag(gen.id, newPosition)}
+        />
       ))}
     </div>
   );
