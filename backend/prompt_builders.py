@@ -18,13 +18,16 @@ STYLE_SYS = (
     "• Species name if identifiable, else 'Unknown species (describe)'\n"
     "• Key visible traits (height, trunk/crownshaft, frond/leaf form, texture, colour)\n"
     "• Typical placement (accent, line, cluster)\n"
-    "Return ONLY these two labeled blocks."
+    "Return ONLY these two labeled blocks.\n"
+    "\n"
+    "IMPORTANT: If SUGGESTED PLANT REFS are present, treat them as mandatory species to include."
 )
 
 def build_style_and_species_blocks(
     base_image_b64: str,
     style_refs_b64: List[str],
     plant_refs_b64: List[str],
+    suggested_plant_refs_b64: List[str] = None,
     vision_model: str = "gpt-4o-mini",
 ) -> Tuple[str, str]:
     """Returns (style_block, species_block) strings."""
@@ -47,6 +50,12 @@ def build_style_and_species_blocks(
         content.append({"type":"text", "text":"PLANT REFS (one species):"})
         for b in plant_refs_b64:
             content.append({"type":"image_url", "image_url":{"url": b64_to_data_url(b)}})
+
+    # Suggested plant refs (must appear in final design)
+    if suggested_plant_refs_b64:
+        content.append({"type": "text", "text": "SUGGESTED PLANT REFS (exact species to include):"})
+        for b in suggested_plant_refs_b64:
+            content.append({"type": "image_url", "image_url": {"url": b64_to_data_url(b)}})
 
     messages = [
         {"role":"system", "content": STYLE_SYS},
@@ -104,6 +113,10 @@ def compose_final_prompt(style_block: str, species_block: str, user_block: str) 
         "INTEGRATION:",
         "- Match global lighting, colour grading, and shadows.",
         "- Add correct contact shadows and occlusion; avoid cut-out edges.",
+        "",
+        "MANDATORY SPECIES PLACEMENT:",
+        "- Include all species from PLANT_SPECIES and any SUGGESTED PLANT REFS clearly and recognisably.",
+        "- Match leaf/flower/branch structure and colour; do not substitute look-alikes.",
     ]
     if user_block.strip():
         parts += ["", user_block]

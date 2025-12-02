@@ -151,6 +151,7 @@ class GenerateAllBody(BaseModel):
     base_image_b64: str              # perspective (use first if you sent many on client)
     style_refs_b64: List[str] = []   # many style images
     plant_refs_b64: List[str] = []   # many plant images (one species)
+    suggested_plant_refs_b64: List[str] = []
     user_prompts: List[PromptItem] = []  # many prompt lines with weights/categories
     mask_b64: Optional[str] = None   # optional (e.g., green overlay → binary mask)
     size: str = "1024x1024"
@@ -162,7 +163,8 @@ def generate_all(body: GenerateAllBody):
         style_block, species_block = build_style_and_species_blocks(
             base_image_b64=body.base_image_b64,
             style_refs_b64=body.style_refs_b64,
-            plant_refs_b64=body.plant_refs_b64
+            plant_refs_b64=body.plant_refs_b64,
+            suggested_plant_refs_b64=body.suggested_plant_refs_b64,
         )
 
         # 2) Add user multi-prompts
@@ -186,4 +188,3 @@ def generate_all(body: GenerateAllBody):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-

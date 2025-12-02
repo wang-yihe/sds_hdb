@@ -1,20 +1,22 @@
 // frontend/src/App.jsx
 import { useState } from "react";
-import MultiUploader from "./MultiUploader";     // your 3-input uploader
+import MultiUploader from "./MultiUploader";
 import PromptComposer from "./PromptComposer";
 
 export default function App() {
   const [persp, setPersp] = useState([]);
   const [styles, setStyles] = useState([]);
   const [plants, setPlants] = useState([]);
+  const [suggestedPlants, setSuggestedPlants] = useState([]); // new
   const [prompts, setPrompts] = useState([]);
   const [resultUrl, setResultUrl] = useState("");
   const [status, setStatus] = useState("Idle");
 
-  function onUploads({ perspective_b64, style_b64, plant_b64 }) {
+  function onUploads({ perspective_b64, style_b64, plant_b64, suggested_plant_b64 }) {
     setPersp(perspective_b64);
     setStyles(style_b64);
     setPlants(plant_b64);
+    setSuggestedPlants(suggested_plant_b64 || []); // new
   }
 
   async function generateAll() {
@@ -24,16 +26,17 @@ export default function App() {
     }
     setStatus("Generating…");
     const body = {
-      base_image_b64: persp[0],          // use first perspective as base
+      base_image_b64: persp[0],
       style_refs_b64: styles,
       plant_refs_b64: plants,
-      user_prompts: prompts.map(p => ({ text: p.text, category: p.category, weight: p.weight })),
-      size: "1024x1024"
+      suggested_plant_refs_b64: suggestedPlants, // new
+      user_prompts: prompts.map((p) => ({ text: p.text, category: p.category, weight: p.weight })),
+      size: "1024x1024",
     };
     const r = await fetch("/api/generate_all", {
       method: "POST",
-      headers: { "Content-Type":"application/json" },
-      body: JSON.stringify(body)
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     });
     const data = await r.json();
     if (!data.ok) {
@@ -41,7 +44,7 @@ export default function App() {
       return;
     }
     setResultUrl(data.resultPath);
-    setStatus("Done ✓");
+    setStatus("Done ✅");
   }
 
   return (
@@ -63,7 +66,11 @@ export default function App() {
       {resultUrl && (
         <div className="mt-4">
           <img src={resultUrl} alt="result" className="max-w-full rounded border" />
-          <div><a href={resultUrl} target="_blank" rel="noreferrer">Open</a></div>
+          <div>
+            <a href={resultUrl} target="_blank" rel="noreferrer">
+              Open
+            </a>
+          </div>
         </div>
       )}
     </div>
