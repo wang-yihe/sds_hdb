@@ -3,10 +3,10 @@ import { Tldraw } from "tldraw";
 import AIHelper from "./AIHelper";
 import { createOriginalCardAsShapes, OriginalCardShapeUtil } from "./OriginalCard"
 import { createGenerationCardAsShapes, GenerationCardShapeUtil } from "./GenerationCard"
+import { VideoCardShapeUtil } from "./VideoCard"
 
 const Canvas = () => {
   const [editor, setEditor] = useState(null);
-  const [generationCount, setGenerationCount] = useState(0);
 
   const handleGenerate = async (data) => {
     if (!editor) return;
@@ -16,19 +16,16 @@ const Canvas = () => {
     // Create original card as native tldraw shape
     await createOriginalCardAsShapes(editor, {
       position: { x: 100, y: 100 },
-      styleImage: data.styleImage,
-      perspectiveImage: data.perspectiveImage,
+      styleImages: data.styleImages,
+      perspectiveImages: data.perspectiveImages,
       plants: data.selectedPlants,
       prompt: data.prompt,
     });
 
-    // Create generation card as native tldraw shape
-    const newGenerationNumber = generationCount + 1;
-    setGenerationCount(newGenerationNumber);
-    
+    // Create generation card as native tldraw shape - always Generation 1 from original
     await createGenerationCardAsShapes(editor, {
       position: { x: 450, y: 100 },
-      generationNumber: newGenerationNumber,
+      generationNumber: 1,
       generatedImage: null, // Will be filled by API response
       originalData: data,
     });
@@ -38,7 +35,7 @@ const Canvas = () => {
     <div style={{ position: 'fixed', inset: 0 }}>
       <Tldraw 
         onMount={(editor) => setEditor(editor)}
-        shapeUtils={[OriginalCardShapeUtil, GenerationCardShapeUtil]}
+        shapeUtils={[OriginalCardShapeUtil, GenerationCardShapeUtil, VideoCardShapeUtil]}
       />
       <AIHelper onGenerate={handleGenerate} />
     </div>

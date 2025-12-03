@@ -2,25 +2,38 @@ import { useState } from "react";
 
 const AIHelper = (props) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [styleImage, setStyleImage] = useState(null);
-  const [perspectiveImage, setPerspectiveImage] = useState(null);
+  const [styleImages, setStyleImages] = useState([]);
+  const [perspectiveImages, setPerspectiveImages] = useState([]);
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedPlants, setSelectedPlants] = useState([]);
   const [plantSearch, setPlantSearch] = useState("");
 
   const handleImageUpload = (e, type) => {
-    const file = e.target.files?.[0];
-    if (file) {
+    const files = Array.from(e.target.files || []);
+    
+    files.forEach(file => {
       const reader = new FileReader();
       reader.onload = (event) => {
+        const imageData = event.target.result;
         if (type === 'style') {
-          setStyleImage(event.target.result);
+          setStyleImages(prev => [...prev, imageData]);
         } else {
-          setPerspectiveImage(event.target.result);
+          setPerspectiveImages(prev => [...prev, imageData]);
         }
       };
       reader.readAsDataURL(file);
+    });
+    
+    // Reset input to allow selecting the same file again
+    e.target.value = '';
+  };
+
+  const removeImage = (type, index) => {
+    if (type === 'style') {
+      setStyleImages(prev => prev.filter((_, i) => i !== index));
+    } else {
+      setPerspectiveImages(prev => prev.filter((_, i) => i !== index));
     }
   };
 
@@ -33,16 +46,16 @@ const AIHelper = (props) => {
   };
 
   const handleGenerate = async () => {
-    if (!styleImage || !perspectiveImage) {
-      alert('Please upload both style reference and perspective view images');
+    if (styleImages.length === 0 || perspectiveImages.length === 0) {
+      alert('Please upload at least one image for both style reference and perspective view');
       return;
     }
 
     setIsGenerating(true);
     try {
       const generationData = {
-        styleImage,
-        perspectiveImage,
+        styleImages,
+        perspectiveImages,
         prompt,
         selectedPlants
       };
@@ -64,8 +77,8 @@ const AIHelper = (props) => {
       setIsModalOpen(false);
       
       // Reset form
-      setStyleImage(null);
-      setPerspectiveImage(null);
+      setStyleImages([]);
+      setPerspectiveImages([]);
       setPrompt("");
       setSelectedPlants([]);
       setPlantSearch("");
@@ -166,73 +179,129 @@ const AIHelper = (props) => {
             {/* Style Reference Upload */}
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
-                📷 Style Reference *
+                📷 Style Reference * ({styleImages.length} image{styleImages.length !== 1 ? 's' : ''})
               </label>
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                <label style={{ 
-                  flex: 1,
-                  padding: '32px 16px', 
-                  background: '#f9fafb', 
-                  border: '2px dashed #d1d5db',
-                  borderRadius: '8px', 
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                  fontSize: '14px',
-                  color: '#6b7280',
-                  transition: 'all 0.2s'
-                }}>
-                  {styleImage ? '✓ Image uploaded' : '+ Click to upload style reference'}
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    onChange={(e) => handleImageUpload(e, 'style')}
-                    style={{ display: 'none' }}
-                  />
-                </label>
-                {styleImage && (
-                  <img 
-                    src={styleImage} 
-                    alt="Style" 
-                    style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '8px', border: '3px solid #10b981' }}
-                  />
-                )}
-              </div>
+              <label style={{ 
+                display: 'block',
+                padding: '32px 16px', 
+                background: '#f9fafb', 
+                border: '2px dashed #d1d5db',
+                borderRadius: '8px', 
+                cursor: 'pointer',
+                textAlign: 'center',
+                fontSize: '14px',
+                color: '#6b7280',
+                transition: 'all 0.2s',
+                marginBottom: '12px'
+              }}>
+                {styleImages.length > 0 ? `+ Add more style references (${styleImages.length} uploaded)` : '+ Click to upload style reference(s)'}
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => handleImageUpload(e, 'style')}
+                  style={{ display: 'none' }}
+                />
+              </label>
+              {styleImages.length > 0 && (
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {styleImages.map((img, index) => (
+                    <div key={index} style={{ position: 'relative' }}>
+                      <img 
+                        src={img} 
+                        alt={`Style ${index + 1}`}
+                        style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '8px', border: '3px solid #10b981' }}
+                      />
+                      <button
+                        onClick={() => removeImage('style', index)}
+                        style={{
+                          position: 'absolute',
+                          top: '-6px',
+                          right: '-6px',
+                          background: '#ef4444',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '50%',
+                          width: '24px',
+                          height: '24px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Perspective View Upload */}
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
-                🏠 Perspective View *
+                🏠 Perspective View * ({perspectiveImages.length} image{perspectiveImages.length !== 1 ? 's' : ''})
               </label>
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                <label style={{ 
-                  flex: 1,
-                  padding: '32px 16px', 
-                  background: '#f9fafb', 
-                  border: '2px dashed #d1d5db',
-                  borderRadius: '8px', 
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                  fontSize: '14px',
-                  color: '#6b7280',
-                  transition: 'all 0.2s'
-                }}>
-                  {perspectiveImage ? '✓ Image uploaded' : '+ Click to upload perspective view'}
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    onChange={(e) => handleImageUpload(e, 'perspective')}
-                    style={{ display: 'none' }}
-                  />
-                </label>
-                {perspectiveImage && (
-                  <img 
-                    src={perspectiveImage} 
-                    alt="Perspective" 
-                    style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '8px', border: '3px solid #3b82f6' }}
-                  />
-                )}
-              </div>
+              <label style={{ 
+                display: 'block',
+                padding: '32px 16px', 
+                background: '#f9fafb', 
+                border: '2px dashed #d1d5db',
+                borderRadius: '8px', 
+                cursor: 'pointer',
+                textAlign: 'center',
+                fontSize: '14px',
+                color: '#6b7280',
+                transition: 'all 0.2s',
+                marginBottom: '12px'
+              }}>
+                {perspectiveImages.length > 0 ? `+ Add more perspective views (${perspectiveImages.length} uploaded)` : '+ Click to upload perspective view(s)'}
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => handleImageUpload(e, 'perspective')}
+                  style={{ display: 'none' }}
+                />
+              </label>
+              {perspectiveImages.length > 0 && (
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {perspectiveImages.map((img, index) => (
+                    <div key={index} style={{ position: 'relative' }}>
+                      <img 
+                        src={img} 
+                        alt={`Perspective ${index + 1}`}
+                        style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '8px', border: '3px solid #3b82f6' }}
+                      />
+                      <button
+                        onClick={() => removeImage('perspective', index)}
+                        style={{
+                          position: 'absolute',
+                          top: '-6px',
+                          right: '-6px',
+                          background: '#ef4444',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '50%',
+                          width: '24px',
+                          height: '24px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Plant Suggestions Section */}
@@ -394,14 +463,14 @@ const AIHelper = (props) => {
               </button>
               <button
                 onClick={handleGenerate}
-                disabled={isGenerating || !styleImage || !perspectiveImage}
+                disabled={isGenerating || styleImages.length === 0 || perspectiveImages.length === 0}
                 style={{
                   padding: '10px 24px',
-                  background: isGenerating || !styleImage || !perspectiveImage ? '#9ca3af' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  background: isGenerating || styleImages.length === 0 || perspectiveImages.length === 0 ? '#9ca3af' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
-                  cursor: isGenerating || !styleImage || !perspectiveImage ? 'not-allowed' : 'pointer',
+                  cursor: isGenerating || styleImages.length === 0 || perspectiveImages.length === 0 ? 'not-allowed' : 'pointer',
                   fontSize: '14px',
                   fontWeight: '500',
                   display: 'flex',

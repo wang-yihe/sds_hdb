@@ -1,7 +1,7 @@
 // Centralized, tweakable configuration (no hard-coded literals in components)
 export const GENERATION_CARD_CONFIG = {
   defaultSize: { w: 380, h: 450 },
-  editExtraHeight: 250,
+  editExtraHeight: 350,
   commentsExtraHeight: 200,
   placeholderImage:
     'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80',
