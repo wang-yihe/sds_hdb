@@ -84,3 +84,58 @@ html, body, #root {
     @apply bg-background text-foreground;
   }
 }
+
+/* Plant Growing Animations */
+@keyframes growPlant1 {
+  0% {
+    transform: translateY(100%) scale(0);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes growPlant2 {
+  0% {
+    transform: translateY(120%) scale(0) rotate(-10deg);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes growPlant3 {
+  0% {
+    transform: translateY(110%) scale(0);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-grow-plant-1 {
+  animation: growPlant1 2s ease-out forwards;
+}
+
+.animate-grow-plant-2 {
+  animation: growPlant2 2.5s ease-out forwards;
+}
+
+.animate-grow-plant-3 {
+  animation: growPlant3 2.2s ease-out forwards;
+}
