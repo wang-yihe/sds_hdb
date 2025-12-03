@@ -116,7 +116,6 @@ def gpt_vision_summarize(messages: list, model: str = "gpt-5.1", max_tokens: int
 # GPT Image Edit (makes final image)
 # ---------------------------
 
-# --- replace the whole gpt_image_edit function in openai_client.py with this ---
 
 def gpt_image_edit(
     image_b64: str,

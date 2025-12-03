@@ -14,7 +14,6 @@ async def register(user_data: UserCreate):
 
 @app.post("/login")
 async def login(credentials: LoginRequest):
-
     return await controller.login_user(credentials)
 
 

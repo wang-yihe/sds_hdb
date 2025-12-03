@@ -1,4 +1,3 @@
-#prompt builders need to go here
 """
 Prompt builders for the multi-stage garden image pipeline.
 

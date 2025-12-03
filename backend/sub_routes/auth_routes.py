@@ -7,7 +7,7 @@ from auth.auth_strategy import (
 )
 from db.db import db
 
-from backend.schemas.auth_schema import ( 
+from schemas.auth_schema import ( 
     LoginRequest,
     UserResponse,
     LoginResponse,

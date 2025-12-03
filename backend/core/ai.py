@@ -4,21 +4,39 @@ import uuid
 import errno
 from PIL import Image
 import cv2
-from fastapi import Path
+from pathlib import Path
 import numpy as np
 from PIL import ImageFilter
 from typing import Tuple, Optional, List
 
-from backend.core.prompts import compose_stage1_prompt,compose_stage2_prompt,compose_stage3_prompt, render_user_prompts, build_style_and_species_blocks
-from backend.utils.ai_helper import _open_as_base64, _b64_to_pil, gpt_image_edit, _rgba_to_rgb, _pil_to_b64
+from core.prompts import compose_stage1_prompt,compose_stage2_prompt,compose_stage3_prompt, render_user_prompts, build_style_and_species_blocks
+from schemas.ai_schema import PromptItem
+from utils.ai_helper import _open_as_base64, _b64_to_pil, gpt_image_edit, _rgba_to_rgb, _pil_to_b64
 
 OUT_DIR = Path("./storage/generated_images")
 
-def binarize(v):
-    if v >= 128:
-        return 255
-    else:
-        return 0
+def _save_bytes(b64: str, prefix: str) -> str:
+    """
+    Save base64 bytes with a short filename into OUT_DIR.
+    Falls back to /tmp on path issues.
+    """
+    name = f"{prefix}_{uuid.uuid4().hex}.png"
+    p = OUT_DIR / name
+    raw = base64.b64decode(b64)
+    try:
+        p.write_bytes(raw)
+        return str(p)
+    except OSError as e:
+        if e.errno in (errno.ENAMETOOLONG, errno.ENOENT, errno.EINVAL):
+            tmp_dir = Path("/tmp/sds_out_fallback")
+            tmp_dir.mkdir(parents=True, exist_ok=True)
+            p2 = tmp_dir / name
+            p2.write_bytes(raw)
+            return str(p2)
+        raise
+
+def _prompt_list_to_dicts(arr: List[PromptItem]) -> List[dict]:
+    return [p.dict() for p in (arr or [])]
     
 def _save_b64_png(b64: str, prefix: str) -> str:
     """

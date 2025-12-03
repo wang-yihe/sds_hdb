@@ -1,6 +1,10 @@
 from pydantic import BaseModel
 from typing import List, Optional
 
+class PreviewMaskBody(BaseModel):
+    base_image_b64: str
+    green_overlay_b64: str  
+    
 class PromptItem(BaseModel):
     text: str
     category: Optional[str] = "global"
