@@ -13,8 +13,8 @@ export class OriginalCardShapeUtil extends ShapeUtil {
   static props = {
     w: T.number,
     h: T.number,
-    styleImage: T.string,
-    perspectiveImage: T.string,
+    styleImages: T.arrayOf(T.string),
+    perspectiveImages: T.arrayOf(T.string),
     plants: T.arrayOf(T.string),
     prompt: T.string,
   }
@@ -23,8 +23,8 @@ export class OriginalCardShapeUtil extends ShapeUtil {
     return {
       w: ORIGINAL_CARD_CONFIG.defaultSize.w,
       h: ORIGINAL_CARD_CONFIG.defaultSize.h,
-      styleImage: ORIGINAL_CARD_CONFIG.placeholderStyleImage,
-      perspectiveImage: ORIGINAL_CARD_CONFIG.placeholderPerspectiveImage,
+      styleImages: [],
+      perspectiveImages: [],
       plants: ORIGINAL_CARD_CONFIG.defaultPlants,
       prompt: ORIGINAL_CARD_CONFIG.defaultPrompt,
     }
@@ -39,7 +39,7 @@ export class OriginalCardShapeUtil extends ShapeUtil {
   }
 
   component(shape) {
-    const { styleImage, perspectiveImage, plants, prompt } = shape.props
+    const { styleImages, perspectiveImages, plants, prompt } = shape.props
 
     return (
       <HTMLContainer>
@@ -82,7 +82,7 @@ export class OriginalCardShapeUtil extends ShapeUtil {
             }}
           >
             {/* Style Reference */}
-            {styleImage && (
+            {styleImages && styleImages.length > 0 && (
               <div>
                 <div
                   style={{
@@ -92,23 +92,32 @@ export class OriginalCardShapeUtil extends ShapeUtil {
                     marginBottom: '8px',
                   }}
                 >
-                  Style Reference:
+                  Style Reference ({styleImages.length}):
                 </div>
-                <img
-                  src={styleImage}
-                  alt="Style"
-                  style={{
-                    width: '100%',
-                    height: '150px',
-                    objectFit: 'cover',
-                    borderRadius: `${ORIGINAL_CARD_CONFIG.radii.image}px`,
-                  }}
-                />
+                <div style={{ 
+                  display: 'grid',
+                  gridTemplateColumns: styleImages.length === 1 ? '1fr' : 'repeat(2, 1fr)',
+                  gap: '8px'
+                }}>
+                  {styleImages.map((img, idx) => (
+                    <img
+                      key={idx}
+                      src={img}
+                      alt={`Style ${idx + 1}`}
+                      style={{
+                        width: '100%',
+                        height: '150px',
+                        objectFit: 'cover',
+                        borderRadius: `${ORIGINAL_CARD_CONFIG.radii.image}px`,
+                      }}
+                    />
+                  ))}
+                </div>
               </div>
             )}
 
             {/* Perspective View */}
-            {perspectiveImage && (
+            {perspectiveImages && perspectiveImages.length > 0 && (
               <div>
                 <div
                   style={{
@@ -118,18 +127,27 @@ export class OriginalCardShapeUtil extends ShapeUtil {
                     marginBottom: '8px',
                   }}
                 >
-                  Perspective View:
+                  Perspective View ({perspectiveImages.length}):
                 </div>
-                <img
-                  src={perspectiveImage}
-                  alt="Perspective"
-                  style={{
-                    width: '100%',
-                    height: '150px',
-                    objectFit: 'cover',
-                    borderRadius: `${ORIGINAL_CARD_CONFIG.radii.image}px`,
-                  }}
-                />
+                <div style={{ 
+                  display: 'grid',
+                  gridTemplateColumns: perspectiveImages.length === 1 ? '1fr' : 'repeat(2, 1fr)',
+                  gap: '8px'
+                }}>
+                  {perspectiveImages.map((img, idx) => (
+                    <img
+                      key={idx}
+                      src={img}
+                      alt={`Perspective ${idx + 1}`}
+                      style={{
+                        width: '100%',
+                        height: '150px',
+                        objectFit: 'cover',
+                        borderRadius: `${ORIGINAL_CARD_CONFIG.radii.image}px`,
+                      }}
+                    />
+                  ))}
+                </div>
               </div>
             )}
 
@@ -205,11 +223,16 @@ export class OriginalCardShapeUtil extends ShapeUtil {
 
 // Helper function to create an original card
 export function createOriginalCardAsShapes(editor, data) {
-  const { position: { x, y }, styleImage, perspectiveImage, plants = [], prompt = '' } = data
+  const { position: { x, y }, styleImages = [], perspectiveImages = [], plants = [], prompt = '' } = data
 
   // Calculate dynamic height based on content
   const baseHeight = ORIGINAL_CARD_CONFIG.headerHeight
-  const imageHeight = (styleImage ? ORIGINAL_CARD_CONFIG.imageBlockOuter : 0) + (perspectiveImage ? ORIGINAL_CARD_CONFIG.imageBlockOuter : 0)
+  
+  // Account for multiple rows if there are many images (2 per row)
+  const styleImageRows = styleImages.length > 0 ? Math.ceil(styleImages.length / 2) : 0
+  const perspectiveImageRows = perspectiveImages.length > 0 ? Math.ceil(perspectiveImages.length / 2) : 0
+  const imageHeight = (styleImageRows + perspectiveImageRows) * ORIGINAL_CARD_CONFIG.imageBlockOuter
+  
   const plantsHeight = plants.length > 0 ? ORIGINAL_CARD_CONFIG.plantsMinHeight : 0
   const promptHeight = prompt ? ORIGINAL_CARD_CONFIG.promptMinHeight : 0
   const calculatedHeight = baseHeight + imageHeight + plantsHeight + promptHeight + ORIGINAL_CARD_CONFIG.paddingBottom
@@ -225,8 +248,8 @@ export function createOriginalCardAsShapes(editor, data) {
       props: {
         w: ORIGINAL_CARD_CONFIG.defaultSize.w,
         h: calculatedHeight,
-        styleImage: styleImage || ORIGINAL_CARD_CONFIG.placeholderStyleImage,
-        perspectiveImage: perspectiveImage || ORIGINAL_CARD_CONFIG.placeholderPerspectiveImage,
+        styleImages: styleImages,
+        perspectiveImages: perspectiveImages,
         plants: plants,
         prompt: prompt || ORIGINAL_CARD_CONFIG.defaultPrompt,
       },

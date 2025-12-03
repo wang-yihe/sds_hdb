@@ -9,6 +9,7 @@ import {
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { GENERATION_CARD_CONFIG } from '../../../config/generationcardconfig'
+import { createVideoCardAsShapes } from './VideoCard'
 
 // Shape Util class for Generation Card
 export class GenerationCardShapeUtil extends ShapeUtil {
@@ -60,6 +61,7 @@ export class GenerationCardShapeUtil extends ShapeUtil {
     const [regenerationPrompt, setRegenerationPrompt] = useState('')
     const [commentText, setCommentText] = useState('')
     const [isImageEnlarged, setIsImageEnlarged] = useState(false)
+    const [selectedPlants, setSelectedPlants] = useState([])
     
     const canvasRef = useRef(null)
     const imageRef = useRef(null)
@@ -90,7 +92,7 @@ export class GenerationCardShapeUtil extends ShapeUtil {
           }
         }])
       }
-    }, [editMode, showComments, comments.length])
+    }, [editMode, showComments, comments.length, selectedPlants.length])
 
     const handleLike = (e) => {
       e.stopPropagation()
@@ -180,7 +182,8 @@ export class GenerationCardShapeUtil extends ShapeUtil {
           originalData: {
             ...shape.props.originalData,
             lassoSelection: lassoPoints,
-            regenerationPrompt: regenerationPrompt.trim()
+            regenerationPrompt: regenerationPrompt.trim(),
+            selectedPlants: selectedPlants
           },
           parentGenerationId: shape.id,
         },
@@ -191,7 +194,28 @@ export class GenerationCardShapeUtil extends ShapeUtil {
       // Clear lasso and prompt after creating new generation
       clearLasso()
       setRegenerationPrompt('')
+      setSelectedPlants([])
       setEditMode(false)
+    }
+
+    const handleGenerateVideo = (e) => {
+      e.stopPropagation()
+      
+      console.log('Generating video from generation:', generationNumber)
+      
+      const currentBounds = editor.getShapePageBounds(shape.id)
+      
+      // Position video card below current card
+      const newX = currentBounds.x
+      const newY = currentBounds.y + currentBounds.height + 50
+      
+      createVideoCardAsShapes(editor, {
+        position: { x: newX, y: newY },
+        generationNumber: generationNumber,
+        videoUrl: null, // Will be filled by API response
+        originalData: shape.props.originalData,
+        sourceGenerationId: shape.id,
+      })
     }
 
     const startLasso = (e) => {
@@ -364,7 +388,7 @@ export class GenerationCardShapeUtil extends ShapeUtil {
         <div
           style={{
             width: '100%',
-            height: '100%',
+            minHeight: '100%',
             pointerEvents: 'all',
             display: 'flex',
             flexDirection: 'column',
@@ -395,7 +419,7 @@ export class GenerationCardShapeUtil extends ShapeUtil {
           </div>
 
           {/* Content */}
-          <div style={{ padding: '16px', flex: 1, overflow: 'visible' }}>
+          <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column' }}>
             {/* Generated Image */}
             <div style={{ marginBottom: '16px', position: 'relative' }}>
               <img 
@@ -522,6 +546,33 @@ export class GenerationCardShapeUtil extends ShapeUtil {
               </button>
             </div>
 
+            {/* Generate Video Button */}
+            <div style={{ marginBottom: '16px' }}>
+              <button
+                onPointerDown={handleGenerateVideo}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  transition: 'transform 0.2s',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                🎬 Generate Video
+              </button>
+            </div>
+
             {/* Edit Mode */}
               {editMode && (
               <div style={{
@@ -590,6 +641,58 @@ export class GenerationCardShapeUtil extends ShapeUtil {
                     💡 Click and drag on the image to draw a selection area
                   </div>
                 )}
+
+                {/* Suggested Plants Section */}
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '500', color: '#1f2937', marginBottom: '8px' }}>
+                    🌱 Suggested Plants:
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                    {['Monstera', 'Fern', 'Snake Plant', 'Pothos', 'Peace Lily', 'Rubber Plant', 'Fiddle Leaf Fig', 'Spider Plant'].map((plant) => (
+                      <button
+                        key={plant}
+                        onPointerDown={(e) => {
+                          e.stopPropagation()
+                          setSelectedPlants(prev => 
+                            prev.includes(plant) 
+                              ? prev.filter(p => p !== plant)
+                              : [...prev, plant]
+                          )
+                        }}
+                        style={{
+                          padding: '6px 12px',
+                          background: selectedPlants.includes(plant) 
+                            ? GENERATION_CARD_CONFIG.colors.primary 
+                            : GENERATION_CARD_CONFIG.colors.surface,
+                          color: selectedPlants.includes(plant) 
+                            ? GENERATION_CARD_CONFIG.colors.headerText 
+                            : '#374151',
+                          border: `1px solid ${selectedPlants.includes(plant) 
+                            ? GENERATION_CARD_CONFIG.colors.primary 
+                            : GENERATION_CARD_CONFIG.colors.mutedBorder}`,
+                          borderRadius: '16px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: '500',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        {plant}
+                      </button>
+                    ))}
+                  </div>
+                  {selectedPlants.length > 0 && (
+                    <div style={{
+                      padding: '6px 10px',
+                      background: '#f0fdf4',
+                      borderRadius: '6px',
+                      fontSize: '11px',
+                      color: '#15803d',
+                    }}>
+                      ✓ {selectedPlants.length} plant{selectedPlants.length !== 1 ? 's' : ''} selected: {selectedPlants.join(', ')}
+                    </div>
+                  )}
+                </div>
 
                 <div style={{ fontSize: '13px', fontWeight: '500', color: '#1f2937', marginBottom: '8px' }}>
                   Regeneration Prompt:
