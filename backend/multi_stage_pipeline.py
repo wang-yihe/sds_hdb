@@ -26,6 +26,11 @@ import numpy as np
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+import random
+from PIL import ImageFilter
+import re
+from rembg import remove as rembg_remove
+
 from PIL import Image
 
 from openai_client import gpt_image_edit
@@ -38,6 +43,8 @@ from prompt_builders import (
 )
 from mask_processing import make_hard_and_soft_masks_from_green
 
+plant_refs_b64_global: List[str] = []
+
 
 # -----------------------
 # Paths & helpers
@@ -46,6 +53,125 @@ from mask_processing import make_hard_and_soft_masks_from_green
 BACKEND_DIR = Path(__file__).parent
 OUT_DIR = BACKEND_DIR / "outputs"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+def _b64_to_pil(b64: str) -> Image.Image:
+    return Image.open(io.BytesIO(base64.b64decode(b64)))
+
+def _pil_to_b64_png(im: Image.Image) -> str:
+    buf = io.BytesIO(); im.save(buf, "PNG"); return base64.b64encode(buf.getvalue()).decode()
+
+def _normalize_mask_L(mask_b64: str, W: int, H: int) -> Image.Image:
+    """Return single-channel 'L' mask (WHITE=editable) resized to (W,H); auto-invert if almost empty/full."""
+    m = _b64_to_pil(mask_b64).convert("L").resize((W, H), Image.NEAREST)
+    arr = np.where(np.array(m) >= 128, 255, 0).astype(np.uint8)
+    r = (arr == 255).mean()
+    if r < 0.02 or r > 0.98:
+        arr = 255 - arr
+    return Image.fromarray(arr, "L")
+
+def _lmask_to_openai_rgba(mask_L: Image.Image) -> bytes:
+    """OpenAI edits where alpha==0 (transparent). Convert WHITE(255)=edit -> alpha 0."""
+    W, H = mask_L.size
+    arr = np.array(mask_L, np.uint8)
+    alpha = np.where(arr == 255, 0, 255).astype(np.uint8)
+    rgba = np.zeros((H, W, 4), np.uint8)
+    rgba[..., 3] = alpha
+    im = Image.fromarray(rgba, "RGBA")
+    buf = io.BytesIO(); im.save(buf, "PNG")
+    return buf.getvalue()
+
+def _clamp_to_mask_keep_outside(base_b64: str, gen_b64: str, mask_b64: str) -> str:
+    """Hard guarantee: base outside mask + gen inside mask."""
+    def b64_to_cv(b):
+        a = np.frombuffer(base64.b64decode(b), np.uint8)
+        return cv2.imdecode(a, cv2.IMREAD_COLOR)
+    base = b64_to_cv(base_b64); gen = b64_to_cv(gen_b64)
+    Hb, Wb = base.shape[:2]
+    if gen.shape[:2] != (Hb, Wb):
+        gen = cv2.resize(gen, (Wb, Hb), interpolation=cv2.INTER_CUBIC)
+    mL = _normalize_mask_L(mask_b64, Wb, Hb)
+    mask = (np.array(mL) == 255)
+    out = base.copy(); out[mask] = gen[mask]
+    ok, enc = cv2.imencode(".png", out)
+    return base64.b64encode(enc.tobytes()).decode()
+
+def _lab_color_transfer(src_b64: str, ref_b64: str) -> str:
+    """Re-tone src to match ref (photographic look)."""
+    def b64_to_cv(b):
+        a = np.frombuffer(base64.b64decode(b), np.uint8)
+        return cv2.imdecode(a, cv2.IMREAD_COLOR)
+    src = b64_to_cv(src_b64); ref = b64_to_cv(ref_b64)
+    H, W = src.shape[:2]
+    ref = cv2.resize(ref, (W, H), cv2.INTER_AREA)
+    s = cv2.cvtColor(src, cv2.COLOR_BGR2LAB).astype(np.float32)
+    r = cv2.cvtColor(ref, cv2.COLOR_BGR2LAB).astype(np.float32)
+    s_m, s_s = cv2.meanStdDev(s); r_m, r_s = cv2.meanStdDev(r)
+    s_s = np.where(s_s < 1e-6, 1.0, s_s); r_s = np.where(r_s < 1e-6, 1.0, r_s)
+    out = (s - s_m.reshape(1,1,3)) * (r_s / s_s) + r_m.reshape(1,1,3)
+    out = np.clip(out, 0, 255).astype(np.uint8)
+    out = cv2.cvtColor(out, cv2.COLOR_LAB2BGR)
+    ok, enc = cv2.imencode(".png", out); return base64.b64encode(enc.tobytes()).decode()
+
+
+
+
+def _alpha_cutout(ref_b64: str) -> Image.Image:
+    im = _b64_to_pil(ref_b64).convert("RGB")
+    out = rembg_remove(np.array(im))  # RGBA
+    return Image.fromarray(out).convert("RGBA")
+
+def build_plant_guide(
+    base_b64: str,
+    mask_b64: str,
+    plant_refs_b64: List[str],
+    density: int,
+    alpha: int,
+    scale_range=(0.7, 1.3),
+) -> str:
+    base = _b64_to_pil(base_b64).convert("RGBA")
+    W, H = base.size
+    mL = _normalize_mask_L(mask_b64, W, H)
+    m = np.array(mL)
+
+    cutouts = [_alpha_cutout(b) for b in plant_refs_b64 if b]
+    if not cutouts:
+        return base64.b64encode(base.tobytes()).decode()
+
+    ys, xs = np.where(m == 255)
+    if len(xs) == 0:
+        return _pil_to_b64_png(base)
+
+    coords = list(zip(ys, xs))
+    random.shuffle(coords)
+    step = max(1, len(coords) // max(1, density))
+    coords = coords[::step][:density]
+
+    canvas = base.copy()
+    for (y, x) in coords:
+        co = random.choice(cutouts).copy()
+        s = random.uniform(*scale_range)
+        nw, nh = int(co.width * s), int(co.height * s)
+        if nw < 32 or nh < 32:
+            continue
+        co = co.resize((nw, nh), Image.LANCZOS)
+
+        bx, by = int(x - nw//2), int(y - nh//2)
+        if bx < 0 or by < 0 or bx+nw > W or by+nh > H:
+            continue
+
+        region = m[by:by+nh, bx:bx+nw]
+        if region.shape[:2] != (nh, nw) or (region == 255).mean() < 0.6:
+            continue
+
+        co = co.filter(ImageFilter.GaussianBlur(radius=0.6))
+        r, g, b, a = co.split()
+        a = a.point(lambda v: min(alpha, v))
+        co = Image.merge("RGBA", (r, g, b, a))
+        canvas.alpha_composite(co, (bx, by))
+
+    return _pil_to_b64_png(canvas)
+
+
 
 
 def _save_b64_png(b64: str, prefix: str) -> str:
@@ -102,36 +228,13 @@ def _open_as_base64(path_or_b64: str) -> str:
     return path_or_b64
 
 
-
-# def _composite_with_mask(base_b64: str, gen_b64: str, mask_b64: str) -> str:
-#     """
-#     Clamp edits to mask: white=editable, black=keep-original.
-#     Returns base64 PNG of (base outside) + (gen inside).
-#     """
-#     def _b64_to_rgba(b):
-#         im = Image.open(io.BytesIO(base64.b64decode(b))).convert("RGBA")
-#         return im
-
-#     base = _b64_to_rgba(base_b64)
-#     gen  = _b64_to_rgba(gen_b64)
-
-#     m = Image.open(io.BytesIO(base64.b64decode(mask_b64))).convert("L")
-#     if m.size != base.size:
-#         m = m.resize(base.size, Image.NEAREST)
-
-#     # White (255) = editable → use generated pixels there
-#     # Black (0)   = keep base → invert to build alpha for generated layer
-#     alpha = m.copy().point(lambda v: 255 if v >= 128 else 0)  # 255 inside, 0 outside
-#     gen_with_alpha = gen.copy()
-#     gen_with_alpha.putalpha(alpha)
-
-#     out = base.copy().convert("RGBA")
-#     out = Image.alpha_composite(out, gen_with_alpha)
-
-#     buf = io.BytesIO()
-#     out.save(buf, "PNG")
-#     return base64.b64encode(buf.getvalue()).decode("utf-8")
-
+WEIGHTS = {
+    "perspective": 1.0,  # hard-clamped
+    "style": 0.9,
+    "plants": 0.7,
+    "mask": 1.0,         # hard rule
+    "prompt": 0.3,
+}
 
 # -----------------------
 # Stage 1
@@ -156,7 +259,11 @@ def run_stage1_layout(
 
     # Build prompt
     prompt = compose_stage1_prompt(style_block, species_block, user_block)
-
+    # prompt = build_weighted_prompt(
+    #     style_block=style_block if WEIGHTS["style"] > 0 else "",
+    #     species_block=species_block if WEIGHTS["plants"] > 0 else "",
+    #     user_prompts_block=user_block if WEIGHTS["prompt"] > 0 else "",
+    # )
     # Mask logic
     mask_b64 = None
     if green_overlay_b64:
@@ -169,6 +276,22 @@ def run_stage1_layout(
         )
         mask_b64 = soft_b64  # canopy freedom
 
+    # guided_b64 = base_image_b64
+    # if WEIGHTS["plants"] > 0:
+    #     # density & alpha scale by weight
+    #     density = max(4, int(14 * WEIGHTS["plants"]))        # 0.7 → ~9–10
+    #     alpha   = int(200 * WEIGHTS["plants"])               # 0..255
+    #     if mask_b64 and plant_refs_b64_global:               # set via generate_all_smart
+    #         guided_b64 = build_plant_guide(
+    #             base_b64=base_image_b64,
+    #             mask_b64=mask_b64,
+    #             plant_refs_b64=plant_refs_b64_global,
+    #             density=density,
+    #             alpha=alpha,
+    #             scale_range=(0.75, 1.25),
+    #         )
+
+
     # Call image edit
     out_b64 = gpt_image_edit(
         image_b64=base_image_b64,
@@ -176,6 +299,15 @@ def run_stage1_layout(
         mask_b64=mask_b64,
         size=size,
     )
+
+    # if mask_b64:
+    #     out_b64 = _clamp_to_mask_keep_outside(base_image_b64, out_b64, mask_b64)
+
+    # # Photographic tone match back to base
+    # try:
+    #     out_b64 = _lab_color_transfer(out_b64, base_image_b64)
+    # except Exception:
+    #     pass
 
     out_path = _save_b64_png(out_b64, "stage1")
 
@@ -294,6 +426,9 @@ def generate_all_smart(
     style_refs_b64 = [ _open_as_base64(b) for b in (style_refs_b64 or []) ]
     plant_refs_b64 = [ _open_as_base64(b) for b in (plant_refs_b64 or []) ]
     green_overlay_b64 = _open_as_base64(green_overlay_b64) if green_overlay_b64 else None
+
+    global plant_refs_b64_global
+    plant_refs_b64_global = plant_refs_b64[:]
 
     # 1) Analyze inputs
     style_block, species_block = build_style_and_species_blocks(

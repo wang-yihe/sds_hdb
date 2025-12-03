@@ -1,3 +1,114 @@
+# # backend/prompt_builders.py
+# from typing import List, Tuple, Optional
+# from openai_client import gpt_vision_summarize, b64_to_data_url
+
+# STYLE_SYS = (
+#     "You assist a landscape designer. You will receive:\n"
+#     "- One PERSPECTIVE (base canvas to preserve)\n"
+#     "- Three STYLE REFS (same garden style)\n"
+#     "- Many PLANT REFS (one species)\n"
+#     "Extract two compact labeled blocks:\n"
+#     "[STYLE]\n"
+#     "• Layout logic (formal vs naturalistic; symmetry/asymmetry)\n"
+#     "• Planting density & massing patterns\n"
+#     "• Colour palette & atmosphere\n"
+#     "• Any recurring shapes (beds/edges/hedges)\n"
+#     "\n"
+#     "[PLANT_SPECIES]\n"
+#     "• Species name if identifiable, else 'Unknown species (describe)'\n"
+#     "• Key visible traits (height, trunk/crownshaft, frond/leaf form, texture, colour)\n"
+#     "• Typical placement (accent, line, cluster)\n"
+#     "Return ONLY these two labeled blocks."
+# )
+
+# def build_style_and_species_blocks(
+#     base_image_b64: str,
+#     style_refs_b64: List[str],
+#     plant_refs_b64: List[str],
+#     vision_model: str = "gpt-4o-mini",
+# ) -> Tuple[str, str]:
+#     """Returns (style_block, species_block) strings."""
+#     content = []
+
+#     # Perspective (for context; we won't parse it, but it helps style judgement)
+#     content += [
+#         {"type":"text", "text":"PERSPECTIVE (for context)"},
+#         {"type":"image_url", "image_url":{"url": b64_to_data_url(base_image_b64)}},
+#     ]
+
+#     # Style refs (3 images recommended)
+#     if style_refs_b64:
+#         content.append({"type":"text", "text":"STYLE REFS (same style theme):"})
+#         for b in style_refs_b64:
+#             content.append({"type":"image_url", "image_url":{"url": b64_to_data_url(b)}})
+
+#     # Plant refs (N images of one species)
+#     if plant_refs_b64:
+#         content.append({"type":"text", "text":"PLANT REFS (one species):"})
+#         for b in plant_refs_b64:
+#             content.append({"type":"image_url", "image_url":{"url": b64_to_data_url(b)}})
+
+#     messages = [
+#         {"role":"system", "content": STYLE_SYS},
+#         {"role":"user", "content": content}
+#     ]
+
+#     raw = gpt_vision_summarize(messages, model=vision_model, max_tokens=600)
+#     # raw should contain [STYLE]... and [PLANT_SPECIES]...
+#     # We keep it simple: return the whole blocks as-is.
+#     style_block = ""
+#     species_block = ""
+#     # naive split (robust enough for now)
+#     lower = raw.lower()
+#     idx_s = lower.find("[style]")
+#     idx_p = lower.find("[plant_species]")
+#     if idx_s != -1 and idx_p != -1 and idx_s < idx_p:
+#         style_block = raw[idx_s:idx_p].strip()
+#         species_block = raw[idx_p:].strip()
+#     else:
+#         # fallback: if model returns in different order, just return raw in style, empty species
+#         style_block = raw.strip()
+#         species_block = ""
+
+#     return style_block, species_block
+
+# def render_user_prompts(items: List[dict]) -> str:
+#     """items: [{text, category, weight}] → formatted block"""
+#     if not items:
+#         return ""
+#     lines = ["USER CONTEXT (ordered; weights indicate importance):"]
+#     for i, it in enumerate(items, start=1):
+#         cat = (it.get("category") or "global")
+#         w = it.get("weight") or 1.0
+#         txt = it.get("text") or ""
+#         lines.append(f"{i}. ({cat}, w={w}) {txt}")
+#     return "\n".join(lines)
+
+# def compose_final_prompt(style_block: str, species_block: str, user_block: str) -> str:
+#     parts = [
+#         "You are editing a rooftop garden perspective image.",
+#         "",
+#         "HARDSCAPE (must preserve exactly):",
+#         "- Buildings, parapet walls, railings, benches, paths, existing planters and shrubs.",
+#         "- Do not alter geometry, camera angle, or skyline.",
+#         "",
+#         "PLANTING ZONES:",
+#         "- If a mask is provided, place new plants ONLY inside the white mask area; keep all other regions unchanged pixel-for-pixel.",
+#         "",
+#         "STYLE (replicate from references):",
+#         style_block or "(no style block detected)",
+#         "",
+#         "SPECIES (must be clearly included and recognisable):",
+#         species_block or "(no species block detected)",
+#         "",
+#         "INTEGRATION:",
+#         "- Match global lighting, colour grading, and shadows.",
+#         "- Add correct contact shadows and occlusion; avoid cut-out edges.",
+#     ]
+#     if user_block.strip():
+#         parts += ["", user_block]
+#     return "\n".join(parts)
+
 # backend/prompt_builders.py
 """
 Prompt builders for the multi-stage garden image pipeline.
@@ -41,7 +152,7 @@ def build_style_and_species_blocks(
     base_image_b64: str,
     style_refs_b64: List[str],
     plant_refs_b64: List[str],
-    vision_model: str = "gpt-5.1",
+    vision_model: str = "gpt-5.0-mini-vision",
     max_tokens: int = 650
 ) -> Tuple[str, str]:
     """
@@ -101,29 +212,49 @@ def build_style_and_species_blocks(
 # =========================
 
 def render_user_prompts(items: List[dict]) -> str:
+    """
+    Convert an array of prompt items to a labeled text block.
+
+    items: [{ "text": str, "category": str, "weight": float }]
+    """
     if not items:
-        items = []
-
-    lines = []
-    
-    # Global mandatory rules (ALWAYS ADDED)
-    lines.append("CRITICAL GLOBAL RULES:")
-    lines.append("- Only add plants inside the provided mask.")
-    lines.append("- Do NOT modify sky, buildings, tiles, benches, railings, or walls.")
-    lines.append("- Preserve original lighting, shadows, perspective, and color temperature.")
-    lines.append("- Photorealistic, natural textures.")
-    lines.append("")
-
-    # User instructions
-    if items:
-        lines.append("User additional instructions:")
-        for it in items:
-            txt = (it.get("text") or "").strip()
-            if txt:
-                lines.append(f"- {txt}")
-
+        return ""
+    lines = ["USER CONTEXT (ordered; weights indicate importance):"]
+    for idx, it in enumerate(items, start=1):
+        cat = (it.get("category") or "global").strip()
+        w = it.get("weight") or 1.0
+        txt = (it.get("text") or "").strip()
+        if not txt:
+            continue
+        lines.append(f"{idx}. ({cat}, w={w}) {txt}")
     return "\n".join(lines)
 
+
+WEIGHTS = {
+    "perspective": 1.0,  # hard-clamped
+    "style": 0.9,
+    "plants": 0.7,
+    "mask": 1.0,         # hard rule
+    "prompt": 0.3,
+}
+
+def build_weighted_prompt(style_block: str, species_block: str, user_prompts_block: str) -> str:
+    lines = []
+    # perspective + mask = 1.0 -> hard rules
+    lines.append("CRITICAL RULES (importance 1.0):")
+    lines.append("- Apply changes only inside the provided mask; keep every pixel outside identical.")
+    lines.append("- Preserve perspective, camera angle, lighting, color temperature, and all hardscape.")
+    lines.append("")
+    if style_block:
+        lines.append(f"STYLE (importance {WEIGHTS['style']:.1f}):\n{style_block}\n")
+    if species_block:
+        # species_block can come from your plant analysis; keep it brief or omit if you prefer zero text
+        lines.append(f"PLANT MORPHOLOGY (importance {WEIGHTS['plants']:.1f}):\n{species_block}\n")
+    if user_prompts_block.strip():
+        lines.append(f"ADDITIONAL USER INTENT (importance {WEIGHTS['prompt']:.1f}):\n{user_prompts_block}\n")
+    lines.append("OUTPUT:")
+    lines.append("- Photorealistic vegetation only; no benches or objects added; natural shadows and textures.")
+    return "\n".join(lines)
 
 # =========================
 # Option B: Clean LA Visualization — Shared rules
@@ -133,9 +264,6 @@ _SHARED_HARDSCAPE_RULES = (
     "HARDSCAPE (pixel-locked outside mask):\n"
     "- Preserve buildings, skyline, parapet walls, railings, benches, paving/tiles, planter edges.\n"
     "- Do NOT alter camera angle, perspective lines, or background geometry.\n"
-    "- Do NOT add plants outside of green areas\n"
-    "- Only add plants to green areas\n"
-    "- Do NOT add other thing such as benches\n"
 )
 
 _SHARED_PLANTING_ZONE_RULES = (
