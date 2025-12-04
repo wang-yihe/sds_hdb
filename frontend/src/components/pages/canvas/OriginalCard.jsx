@@ -5,7 +5,6 @@ import {
   Rectangle2d,
   T
 } from 'tldraw'
-import { ORIGINAL_CARD_CONFIG } from '../../../config/originalcardconfig'
 
 // Shape Util class
 export class OriginalCardShapeUtil extends ShapeUtil {
@@ -13,20 +12,20 @@ export class OriginalCardShapeUtil extends ShapeUtil {
   static props = {
     w: T.number,
     h: T.number,
-    styleImages: T.arrayOf(T.string),
-    perspectiveImages: T.arrayOf(T.string),
+    styleImage: T.string,
+    perspectiveImage: T.string,
     plants: T.arrayOf(T.string),
     prompt: T.string,
   }
 
   getDefaultProps() {
     return {
-      w: ORIGINAL_CARD_CONFIG.defaultSize.w,
-      h: ORIGINAL_CARD_CONFIG.defaultSize.h,
-      styleImages: [],
-      perspectiveImages: [],
-      plants: ORIGINAL_CARD_CONFIG.defaultPlants,
-      prompt: ORIGINAL_CARD_CONFIG.defaultPrompt,
+      w: 320,
+      h: 400,
+      styleImage: '',
+      perspectiveImage: '',
+      plants: [],
+      prompt: '',
     }
   }
 
@@ -39,7 +38,7 @@ export class OriginalCardShapeUtil extends ShapeUtil {
   }
 
   component(shape) {
-    const { styleImages, perspectiveImages, plants, prompt } = shape.props
+    const { styleImage, perspectiveImage, plants, prompt } = shape.props
 
     return (
       <HTMLContainer>
@@ -50,19 +49,19 @@ export class OriginalCardShapeUtil extends ShapeUtil {
             pointerEvents: 'all',
             display: 'flex',
             flexDirection: 'column',
-            background: ORIGINAL_CARD_CONFIG.colors.surface,
-            borderRadius: `${ORIGINAL_CARD_CONFIG.radii.card}px`,
-            boxShadow: ORIGINAL_CARD_CONFIG.shadow,
+            background: 'white',
+            borderRadius: '12px',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
             overflow: 'hidden',
-            fontFamily: ORIGINAL_CARD_CONFIG.fonts.base,
+            fontFamily: 'sans-serif',
           }}
         >
           {/* Header */}
           <div
             style={{
               padding: '16px',
-              background: `linear-gradient(135deg, ${ORIGINAL_CARD_CONFIG.colors.headerFrom} 0%, ${ORIGINAL_CARD_CONFIG.colors.headerTo} 100%)`,
-              color: ORIGINAL_CARD_CONFIG.colors.headerText,
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
               fontWeight: '600',
               fontSize: '16px',
             }}
@@ -82,72 +81,54 @@ export class OriginalCardShapeUtil extends ShapeUtil {
             }}
           >
             {/* Style Reference */}
-            {styleImages && styleImages.length > 0 && (
+            {styleImage && (
               <div>
                 <div
                   style={{
                     fontSize: '13px',
                     fontWeight: '500',
-                    color: ORIGINAL_CARD_CONFIG.colors.label,
+                    color: '#6b7280',
                     marginBottom: '8px',
                   }}
                 >
-                  Style Reference ({styleImages.length}):
+                  Style Reference:
                 </div>
-                <div style={{ 
-                  display: 'grid',
-                  gridTemplateColumns: styleImages.length === 1 ? '1fr' : 'repeat(2, 1fr)',
-                  gap: '8px'
-                }}>
-                  {styleImages.map((img, idx) => (
-                    <img
-                      key={idx}
-                      src={img}
-                      alt={`Style ${idx + 1}`}
-                      style={{
-                        width: '100%',
-                        height: '150px',
-                        objectFit: 'cover',
-                        borderRadius: `${ORIGINAL_CARD_CONFIG.radii.image}px`,
-                      }}
-                    />
-                  ))}
-                </div>
+                <img
+                  src={styleImage}
+                  alt="Style"
+                  style={{
+                    width: '100%',
+                    height: '150px',
+                    objectFit: 'cover',
+                    borderRadius: '8px',
+                  }}
+                />
               </div>
             )}
 
             {/* Perspective View */}
-            {perspectiveImages && perspectiveImages.length > 0 && (
+            {perspectiveImage && (
               <div>
                 <div
                   style={{
                     fontSize: '13px',
                     fontWeight: '500',
-                    color: ORIGINAL_CARD_CONFIG.colors.label,
+                    color: '#6b7280',
                     marginBottom: '8px',
                   }}
                 >
-                  Perspective View ({perspectiveImages.length}):
+                  Perspective View:
                 </div>
-                <div style={{ 
-                  display: 'grid',
-                  gridTemplateColumns: perspectiveImages.length === 1 ? '1fr' : 'repeat(2, 1fr)',
-                  gap: '8px'
-                }}>
-                  {perspectiveImages.map((img, idx) => (
-                    <img
-                      key={idx}
-                      src={img}
-                      alt={`Perspective ${idx + 1}`}
-                      style={{
-                        width: '100%',
-                        height: '150px',
-                        objectFit: 'cover',
-                        borderRadius: `${ORIGINAL_CARD_CONFIG.radii.image}px`,
-                      }}
-                    />
-                  ))}
-                </div>
+                <img
+                  src={perspectiveImage}
+                  alt="Perspective"
+                  style={{
+                    width: '100%',
+                    height: '150px',
+                    objectFit: 'cover',
+                    borderRadius: '8px',
+                  }}
+                />
               </div>
             )}
 
@@ -158,7 +139,7 @@ export class OriginalCardShapeUtil extends ShapeUtil {
                   style={{
                     fontSize: '13px',
                     fontWeight: '500',
-                    color: ORIGINAL_CARD_CONFIG.colors.label,
+                    color: '#6b7280',
                     marginBottom: '8px',
                   }}
                 >
@@ -170,10 +151,10 @@ export class OriginalCardShapeUtil extends ShapeUtil {
                       key={idx}
                       style={{
                         padding: '4px 10px',
-                        background: ORIGINAL_CARD_CONFIG.colors.chipBg,
-                        borderRadius: `${ORIGINAL_CARD_CONFIG.radii.chip}px`,
+                        background: '#f3f4f6',
+                        borderRadius: '12px',
                         fontSize: '12px',
-                        color: ORIGINAL_CARD_CONFIG.colors.chipFg,
+                        color: '#374151',
                       }}
                     >
                       🌱 {plant}
@@ -190,7 +171,7 @@ export class OriginalCardShapeUtil extends ShapeUtil {
                   style={{
                     fontSize: '13px',
                     fontWeight: '500',
-                    color: ORIGINAL_CARD_CONFIG.colors.label,
+                    color: '#6b7280',
                     marginBottom: '8px',
                   }}
                 >
@@ -199,10 +180,10 @@ export class OriginalCardShapeUtil extends ShapeUtil {
                 <div
                   style={{
                     padding: '12px',
-                    background: ORIGINAL_CARD_CONFIG.colors.promptBg,
-                    borderRadius: `${ORIGINAL_CARD_CONFIG.radii.prompt}px`,
+                    background: '#f9fafb',
+                    borderRadius: '8px',
                     fontSize: '13px',
-                    color: ORIGINAL_CARD_CONFIG.colors.promptFg,
+                    color: '#374151',
                     lineHeight: '1.5',
                   }}
                 >
@@ -223,21 +204,16 @@ export class OriginalCardShapeUtil extends ShapeUtil {
 
 // Helper function to create an original card
 export function createOriginalCardAsShapes(editor, data) {
-  const { position: { x, y }, styleImages = [], perspectiveImages = [], plants = [], prompt = '' } = data
+  const { position: { x, y }, styleImage, perspectiveImage, plants = [], prompt = '' } = data
 
   // Calculate dynamic height based on content
-  const baseHeight = ORIGINAL_CARD_CONFIG.headerHeight
-  
-  // Account for multiple rows if there are many images (2 per row)
-  const styleImageRows = styleImages.length > 0 ? Math.ceil(styleImages.length / 2) : 0
-  const perspectiveImageRows = perspectiveImages.length > 0 ? Math.ceil(perspectiveImages.length / 2) : 0
-  const imageHeight = (styleImageRows + perspectiveImageRows) * ORIGINAL_CARD_CONFIG.imageBlockOuter
-  
-  const plantsHeight = plants.length > 0 ? ORIGINAL_CARD_CONFIG.plantsMinHeight : 0
-  const promptHeight = prompt ? ORIGINAL_CARD_CONFIG.promptMinHeight : 0
-  const calculatedHeight = baseHeight + imageHeight + plantsHeight + promptHeight + ORIGINAL_CARD_CONFIG.paddingBottom
+  const baseHeight = 60 // header
+  const imageHeight = (styleImage ? 180 : 0) + (perspectiveImage ? 180 : 0)
+  const plantsHeight = plants.length > 0 ? 80 : 0
+  const promptHeight = prompt ? 120 : 0
+  const calculatedHeight = baseHeight + imageHeight + plantsHeight + promptHeight + 40
 
-  const cardId = createShapeId(ORIGINAL_CARD_CONFIG.createCardId())
+  const cardId = createShapeId(`originalCard_${Date.now()}`)
   
   editor.createShapes([
     {
@@ -246,12 +222,12 @@ export function createOriginalCardAsShapes(editor, data) {
       x,
       y,
       props: {
-        w: ORIGINAL_CARD_CONFIG.defaultSize.w,
+        w: 320,
         h: calculatedHeight,
-        styleImages: styleImages,
-        perspectiveImages: perspectiveImages,
+        styleImage: styleImage || '',
+        perspectiveImage: perspectiveImage || '',
         plants: plants,
-        prompt: prompt || ORIGINAL_CARD_CONFIG.defaultPrompt,
+        prompt: prompt || '',
       },
     },
   ])
