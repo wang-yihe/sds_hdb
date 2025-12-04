@@ -9,7 +9,8 @@ const useAppRouter = () => {
 
     const validRoutes = [
         '/canvas',
-        '/users',
+        '/user',
+        '/project',
         '/',
         // Add your app's valid routes here
     ];
@@ -26,7 +27,7 @@ const useAppRouter = () => {
         } else if (lastValidPath.current && lastValidPath.current !== location.pathname) {
             navigate(lastValidPath.current);
         } else {
-            navigate('/canvas');
+            navigate('/project');
         }
     };
 

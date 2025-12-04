@@ -16,6 +16,7 @@ const useUser = () => {
         defaultValues: {
             name: "",
             email: "",
+            password: ""
         }
     });
 
@@ -37,7 +38,16 @@ const useUser = () => {
         }
     };
 
-    // Delete user
+    // Add this new function
+    const handleUpdateUser = async (userId, userData) => {
+        try {
+            await dispatch(updateUser({ id: userId, userData })).unwrap();
+            alert("User updated successfully!");
+        } catch (error) {
+            alert("Failed to update user: " + error);
+        }
+    };
+
     const handleDeleteUser = async (userId) => {
         if (window.confirm("Are you sure you want to delete this user?")) {
             try {
@@ -49,21 +59,12 @@ const useUser = () => {
         }
     };
 
-    // Edit user (populate form with existing data)
-    const startEditUser = (user) => {
-        setValue("name", user.name);
-        setValue("email", user.email);
-    };
-
-    // Clear form
     const clearForm = () => {
         reset();
     };
 
-    // Check if user list is empty
     const hasUsers = userList.length > 0;
 
-    // Get user by ID
     const getUserById = (id) => {
         return userList.find(user => user.id === id);
     };
@@ -79,12 +80,13 @@ const useUser = () => {
         handleSubmit,
         errors,
         watch,
+        setValue,
         
         // Actions
         loadUsers,
         handleCreateUser,
+        handleUpdateUser, // Add this to exports
         handleDeleteUser,
-        startEditUser,
         clearForm,
         getUserById
     };

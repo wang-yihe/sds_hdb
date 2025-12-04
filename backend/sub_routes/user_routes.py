@@ -1,8 +1,9 @@
 # routes/user_router.py
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 from typing import List
 from controllers.user_controller import UserController
 from schemas.user_schema import UserCreate, UserUpdate, UserResponse, LoginRequest
+from auth.auth_dependencies import get_current_user
 
 app = APIRouter()
 controller = UserController()
@@ -18,9 +19,10 @@ async def login(credentials: LoginRequest):
 
 
 @app.get("/get_current_user_profile", response_model=UserResponse)
-async def get_current_user_profile():
-
-    return await controller.get_current_user_profile()
+async def get_current_user_profile(
+    current_user: dict = Depends(get_current_user)
+):
+    return await controller.get_current_user_profile(current_user)
 
 @app.get("/get_all_users", response_model=List[UserResponse])
 async def get_all_users(
@@ -36,9 +38,16 @@ async def get_user_by_id(user_id: str):
 
 
 @app.put("/update_user/{user_id}", response_model=UserResponse)
-async def update_user(user_id: str, user_data: UserUpdate):
-    return await controller.update_user(user_id, user_data)
+async def update_user(
+    user_id: str, 
+    user_data: UserUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    return await controller.update_user(user_id, user_data, current_user)
 
 @app.delete("/delete_user/{user_id}")
-async def delete_user(user_id: str):
-    return await controller.delete_user(user_id)
+async def delete_user(
+    user_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    return await controller.delete_user(user_id, current_user)

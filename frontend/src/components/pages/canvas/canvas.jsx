@@ -32,7 +32,7 @@ const Canvas = () => {
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0 }}>
+    <div className="w-full h-screen relative">
       <Tldraw 
         onMount={(editor) => setEditor(editor)}
         shapeUtils={[OriginalCardShapeUtil, GenerationCardShapeUtil, VideoCardShapeUtil]}

@@ -33,10 +33,10 @@ class ProjectService:
     @staticmethod
     async def update_project(project_id: str, project_data: ProjectUpdate) -> Optional[Project]:
         try:
+            update_dict = project_data.model_dump(exclude_unset=True)
             return await ProjectRepository.update_project(
                 project_id=project_id,
-                name=project_data.name,
-                description=project_data.description
+                **update_dict  # Unpack the dict to pass as kwargs
             )
         except Exception as e:
             raise e

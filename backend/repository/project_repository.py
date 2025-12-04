@@ -42,7 +42,7 @@ class ProjectRepository:
             raise e
     
     @staticmethod
-    async def update_project(project_id: str, name: Optional[str] = None, description: Optional[str] = None) -> Optional[Project]:
+    async def update_project(project_id: str, name: Optional[str] = None, description: Optional[str] = None, thumbnail: Optional[str] = None) -> Optional[Project]:
         try:
             project = await Project.get(ObjectId(project_id))
             if not project:
@@ -52,6 +52,8 @@ class ProjectRepository:
                 project.name = name
             if description is not None:
                 project.description = description
+            if thumbnail is not None:
+                project.thumbnail = thumbnail
             
             project.updated_at = datetime.utcnow()
             await project.save()

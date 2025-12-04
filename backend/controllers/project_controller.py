@@ -1,9 +1,10 @@
-from fastapi import HTTPException, status, Depends
+from fastapi import HTTPException, status, UploadFile
 from typing import List
-
+import traceback
+import uuid
+from pathlib import Path
 from schemas.project_schema import ProjectCreate, ProjectUpdate, ProjectResponse, CollaboratorAdd
 from services.project_service import ProjectService
-from auth.auth_dependencies import get_current_user
 
 
 class ProjectController:
@@ -11,7 +12,7 @@ class ProjectController:
     @staticmethod
     async def create_project(
         project_data: ProjectCreate,
-        current_user: dict = Depends(get_current_user)
+        current_user: dict
     ) -> ProjectResponse:
         try:
             project = await ProjectService.create_project(project_data, current_user["id"])
@@ -21,10 +22,12 @@ class ProjectController:
                 description=project.description,
                 owner_id=str(project.owner_id),
                 collaborator_ids=[str(cid) for cid in project.collaborator_ids],
+                thumbnail=project.thumbnail,
                 created_at=project.created_at,
                 updated_at=project.updated_at
             )
         except Exception as e:
+            traceback.print_exc()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error creating project: {str(e)}"
@@ -32,7 +35,7 @@ class ProjectController:
     
     @staticmethod
     async def get_user_projects(
-        current_user: dict = Depends(get_current_user)
+        current_user: dict
     ) -> List[ProjectResponse]:
         try:
             projects = await ProjectService.get_user_projects(current_user["id"])
@@ -43,12 +46,14 @@ class ProjectController:
                     description=project.description,
                     owner_id=str(project.owner_id),
                     collaborator_ids=[str(cid) for cid in project.collaborator_ids],
+                    thumbnail=project.thumbnail,
                     created_at=project.created_at,
                     updated_at=project.updated_at
                 )
                 for project in projects
             ]
         except Exception as e:
+            traceback.print_exc()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error fetching projects: {str(e)}"
@@ -57,7 +62,7 @@ class ProjectController:
     @staticmethod
     async def get_project_by_id(
         project_id: str,
-        current_user: dict = Depends(get_current_user)
+        current_user: dict
     ) -> ProjectResponse:
         try:
             project = await ProjectService.get_project(project_id)
@@ -79,6 +84,7 @@ class ProjectController:
                 description=project.description,
                 owner_id=str(project.owner_id),
                 collaborator_ids=[str(cid) for cid in project.collaborator_ids],
+                thumbnail=project.thumbnail,
                 created_at=project.created_at,
                 updated_at=project.updated_at
             )
@@ -94,7 +100,7 @@ class ProjectController:
     async def update_project(
         project_id: str,
         project_data: ProjectUpdate,
-        current_user: dict = Depends(get_current_user)
+        current_user: dict
     ) -> ProjectResponse:
         try:
             project = await ProjectService.get_project(project_id)
@@ -123,6 +129,7 @@ class ProjectController:
                 description=updated_project.description,
                 owner_id=str(updated_project.owner_id),
                 collaborator_ids=[str(cid) for cid in updated_project.collaborator_ids],
+                thumbnail=updated_project.thumbnail,
                 created_at=updated_project.created_at,
                 updated_at=updated_project.updated_at
             )
@@ -137,7 +144,7 @@ class ProjectController:
     @staticmethod
     async def delete_project(
         project_id: str,
-        current_user: dict = Depends(get_current_user)
+        current_user: dict
     ) -> dict:
         try:
             project = await ProjectService.get_project(project_id)
@@ -173,7 +180,7 @@ class ProjectController:
     async def add_collaborator(
         project_id: str,
         collaborator_data: CollaboratorAdd,
-        current_user: dict = Depends(get_current_user)
+        current_user: dict
     ) -> ProjectResponse:
         try:
             project = await ProjectService.get_project(project_id)
@@ -202,6 +209,7 @@ class ProjectController:
                 description=updated_project.description,
                 owner_id=str(updated_project.owner_id),
                 collaborator_ids=[str(cid) for cid in updated_project.collaborator_ids],
+                thumbnail=updated_project.thumbnail,
                 created_at=updated_project.created_at,
                 updated_at=updated_project.updated_at
             )
@@ -222,7 +230,7 @@ class ProjectController:
     async def remove_collaborator(
         project_id: str,
         collaborator_data: CollaboratorAdd,
-        current_user: dict = Depends(get_current_user)
+        current_user: dict
     ) -> ProjectResponse:
         try:
             project = await ProjectService.get_project(project_id)
@@ -251,6 +259,7 @@ class ProjectController:
                 description=updated_project.description,
                 owner_id=str(updated_project.owner_id),
                 collaborator_ids=[str(cid) for cid in updated_project.collaborator_ids],
+                thumbnail=updated_project.thumbnail,
                 created_at=updated_project.created_at,
                 updated_at=updated_project.updated_at
             )
@@ -265,4 +274,79 @@ class ProjectController:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error removing collaborator: {str(e)}"
+            )
+    
+    @staticmethod
+    async def upload_thumbnail(
+        project_id: str,
+        file: UploadFile,
+        current_user: dict
+    ):
+        try:
+            project = await ProjectService.get_project(project_id)
+            if not project:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Project not found"
+                )
+            
+            if str(project.owner_id) != current_user["id"]:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only project owner can upload thumbnail"
+                )
+            
+            allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+            if file.content_type not in allowed_types:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed"
+                )
+            
+            file_size = 0
+            chunk_size = 1024 * 1024
+            for chunk in iter(lambda: file.file.read(chunk_size), b''):
+                file_size += len(chunk)
+                if file_size > 5 * 1024 * 1024:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="File size exceeds 5MB limit"
+                    )
+            
+            file.file.seek(0)
+            
+            # Fix: Handle None filename
+            filename = file.filename or "upload"
+            file_extension = Path(filename).suffix or ".jpg"
+            unique_filename = f"{uuid.uuid4()}{file_extension}"
+            
+            upload_dir = Path("uploads/thumbnails")
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            file_path = upload_dir / unique_filename
+            
+            with open(file_path, "wb") as f:
+                f.write(file.file.read())
+            
+            thumbnail_url = f"/uploads/thumbnails/{unique_filename}"
+            
+            # Fix: Pass name parameter explicitly
+            await ProjectService.update_project(
+                project_id, 
+                ProjectUpdate(
+                    name=project.name,
+                    thumbnail=thumbnail_url
+                )
+            )
+            
+            return {
+                "message": "Thumbnail uploaded successfully",
+                "thumbnail_url": thumbnail_url
+            }
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error uploading thumbnail: {str(e)}"
             )

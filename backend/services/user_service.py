@@ -18,6 +18,7 @@ class UserService:
                 name=user.name,
                 email=user.email,
                 is_active=user.is_active,
+                must_change_password=user.must_change_password,
                 created_at=user.created_at,
                 updated_at=user.updated_at
             )
@@ -36,6 +37,7 @@ class UserService:
             name=user.name,
             email=user.email,
             is_active=user.is_active,
+            must_change_password=user.must_change_password,
             created_at=user.created_at,
             updated_at=user.updated_at
         )
@@ -46,13 +48,15 @@ class UserService:
         if any(u.email == user_data.email for u in existing_users):
             raise ValueError("Email already registered")
         
-        hashed_password = hash_password(user_data.password)
-        print(user_data.password)
+        default_password = "TempPassword123!"
+        hashed_password = hash_password(default_password)
+        
         user = User(
             name=user_data.name,
             email=user_data.email,
             password_hash=hashed_password,
-            is_active=True
+            is_active=True,
+            must_change_password=True
         )
         
         created_user = await UserRepository.create_user(user)
@@ -62,6 +66,7 @@ class UserService:
             name=created_user.name,
             email=created_user.email,
             is_active=created_user.is_active,
+            must_change_password=created_user.must_change_password,
             created_at=created_user.created_at,
             updated_at=created_user.updated_at
         )
@@ -76,6 +81,7 @@ class UserService:
         
         if "password" in update_data:
             update_data["password_hash"] = hash_password(update_data.pop("password"))
+            update_data["must_change_password"] = False
         
         update_data["updated_at"] = datetime.utcnow()
         
@@ -89,6 +95,7 @@ class UserService:
             name=updated_user.name,
             email=updated_user.email,
             is_active=updated_user.is_active,
+            must_change_password=updated_user.must_change_password,
             created_at=updated_user.created_at,
             updated_at=updated_user.updated_at
         )
@@ -118,11 +125,13 @@ class UserService:
         return {
             "access_token": access_token,
             "token_type": "bearer",
+            "must_change_password": user.must_change_password,
             "user": UserResponse(
                 id=str(user.id),
                 name=user.name,
                 email=user.email,
                 is_active=user.is_active,
+                must_change_password=user.must_change_password,
                 created_at=user.created_at,
                 updated_at=user.updated_at
             )

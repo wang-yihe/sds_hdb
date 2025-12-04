@@ -7,6 +7,7 @@ class User(Document):
     email: EmailStr
     password_hash: str
     is_active: bool = True
+    must_change_password: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     

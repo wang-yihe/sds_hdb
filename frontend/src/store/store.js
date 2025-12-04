@@ -5,11 +5,13 @@ import canvasReducer from "@/store/slices/canvasSlice";
 import globalLoaderReducer from "@/store/slices/globalLoaderSlice";
 import userReducer from "@/store/slices/userSlice";
 import authReducer from "@/store/slices/authSlice";
+import projectReducer from "@/store/slices/projectSlice";
 
 const rootReducer = combineReducers({
     canvas: canvasReducer,
     globalLoader: globalLoaderReducer,
     user: userReducer,
+    project: projectReducer,
     auth: authReducer,
 });
 

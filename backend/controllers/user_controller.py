@@ -1,9 +1,8 @@
-from fastapi import HTTPException, status, Depends, Query
+from fastapi import HTTPException, status, Query
 from typing import List
 
 from schemas.user_schema import UserCreate, UserUpdate, UserResponse, LoginRequest
 from services.user_service import UserService
-from auth.auth_dependencies import get_current_user
 
 
 class UserController:        
@@ -54,7 +53,7 @@ class UserController:
     async def update_user(
         user_id: str,
         user_data: UserUpdate,
-        current_user: dict = Depends(get_current_user)
+        current_user: dict
     ) -> UserResponse:
         try:
             if user_id != current_user["id"]:
@@ -80,7 +79,7 @@ class UserController:
     @staticmethod
     async def delete_user(
         user_id: str,
-        current_user: dict = Depends(get_current_user)
+        current_user: dict
     ) -> dict:
         try:
             if user_id != current_user["id"]:
@@ -118,7 +117,6 @@ class UserController:
                 headers={"WWW-Authenticate": "Bearer"}
             )
         except Exception as e:
-            # Unexpected errors
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error authenticating user: {str(e)}"
@@ -126,9 +124,8 @@ class UserController:
     
     @staticmethod
     async def get_current_user_profile(
-        current_user: dict = Depends(get_current_user)
+        current_user: dict
     ) -> UserResponse:
-        """Get current authenticated user's profile"""
         try:
             return await UserService.get_user_by_id(current_user["id"])
         except ValueError as e:

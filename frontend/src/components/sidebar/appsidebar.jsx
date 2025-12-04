@@ -25,9 +25,8 @@ const Sidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const navItems = [
-    {
-      path: '/canvas',
-      label: 'Canvas',
+    { path: '/project',
+      label: 'Projects', 
       icon: LayoutDashboard
     },
     {

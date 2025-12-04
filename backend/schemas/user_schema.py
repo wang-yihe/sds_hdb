@@ -9,14 +9,13 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    password: str = Field(..., min_length=8, max_length=100)
+    # Password field removed - will use default in service
     
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "name": "John Doe",
-                "email": "john@example.com",
-                "password": "securePassword123"
+                "email": "john@example.com"
             }
         }
     )
@@ -32,6 +31,7 @@ class UserUpdate(BaseModel):
 class UserResponse(UserBase):
     id: str
     is_active: bool
+    must_change_password: bool
     created_at: datetime
     updated_at: datetime
     
@@ -43,6 +43,7 @@ class UserResponse(UserBase):
                 "name": "John Doe",
                 "email": "john@example.com",
                 "is_active": True,
+                "must_change_password": False,
                 "created_at": "2024-01-01T00:00:00",
                 "updated_at": "2024-01-01T00:00:00"
             }
@@ -58,4 +59,5 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    must_change_password: bool
     user: UserResponse
