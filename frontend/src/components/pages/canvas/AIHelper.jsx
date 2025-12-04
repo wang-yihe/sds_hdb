@@ -8,6 +8,7 @@ const AIHelper = (props) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedPlants, setSelectedPlants] = useState([]);
   const [plantSearch, setPlantSearch] = useState("");
+  const [isHovered, setIsHovered] = useState(false);
 
   const handleImageUpload = (e, type) => {
     const files = Array.from(e.target.files || []);
@@ -92,41 +93,190 @@ const AIHelper = (props) => {
 
   return (
     <>
-      {/* AI Helper Button */}
-      <button
-        onClick={() => setIsModalOpen(true)}
+      {/* AI Helper Button with Vine Animation */}
+      <div 
         style={{
           position: 'absolute',
-          bottom: '16px',
-          right: '16px',
-          padding: '12px 20px',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          border: 'none',
-          borderRadius: '8px',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '8px',
-          boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)',
-          transition: 'transform 0.2s, box-shadow 0.2s',
+          bottom: '12px',
+          left: 'calc(50% + 280px)',
           zIndex: 1000
         }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'scale(1.05)';
-          e.currentTarget.style.boxShadow = '0 6px 16px rgba(102, 126, 234, 0.5)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'scale(1)';
-          e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
-        }}
-        title="AI Planting Visualiser"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       >
-        <span style={{ fontSize: '20px' }}>✨</span>
-        <span style={{ fontSize: '14px', fontWeight: '600', color: 'white', whiteSpace: 'nowrap' }}>
-          AI Planting Visualiser
-        </span>
-      </button>
+        {/* Growing Vines Animation */}
+        {isHovered && (
+          <>
+            {/* Left Vine */}
+            <div style={{
+              position: 'absolute',
+              bottom: '-10px',
+              left: '-120px',
+              width: '150px',
+              height: '80px',
+              animation: 'growVineLeft 0.8s ease-out forwards',
+              transformOrigin: 'bottom right',
+              pointerEvents: 'none'
+            }}>
+              <img 
+                src="/vine.png" 
+                alt="vine"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  transform: 'scaleX(-1)'
+                }}
+              />
+            </div>
+            
+            {/* Right Vine */}
+            <div style={{
+              position: 'absolute',
+              bottom: '-10px',
+              right: '-120px',
+              width: '150px',
+              height: '80px',
+              animation: 'growVineRight 0.8s ease-out forwards',
+              transformOrigin: 'bottom left',
+              pointerEvents: 'none'
+            }}>
+              <img 
+                src="/vine.png" 
+                alt="vine"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain'
+                }}
+              />
+            </div>
+            
+            {/* Floating Flowers */}
+            <div style={{
+              position: 'absolute',
+              top: '-25px',
+              left: '-15px',
+              animation: 'floatFlower 2s ease-in-out infinite',
+              pointerEvents: 'none'
+            }}>
+              <span style={{ fontSize: '20px' }}>🌸</span>
+            </div>
+            <div style={{
+              position: 'absolute',
+              top: '-30px',
+              right: '-10px',
+              animation: 'floatFlower 2s ease-in-out infinite 0.3s',
+              pointerEvents: 'none'
+            }}>
+              <span style={{ fontSize: '18px' }}>🌺</span>
+            </div>
+            
+            {/* Sparkles */}
+            <div style={{
+              position: 'absolute',
+              top: '-10px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              animation: 'sparkle 1s ease-in-out infinite',
+              pointerEvents: 'none'
+            }}>
+              <span style={{ fontSize: '16px' }}>✨</span>
+            </div>
+          </>
+        )}
+        
+        <button
+          onClick={() => setIsModalOpen(true)}
+          style={{
+            position: 'relative',
+            padding: '6px 14px',
+            height: '40px',
+            background: isHovered 
+              ? 'linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%)' 
+              : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            boxShadow: isHovered 
+              ? '0 6px 20px rgba(124, 58, 237, 0.6)' 
+              : '0 4px 12px rgba(102, 126, 234, 0.4)',
+            transform: isHovered ? 'scale(1.08)' : 'scale(1)',
+            transition: 'all 0.3s ease',
+            zIndex: 1001
+          }}
+          title="AI Planting Visualiser"
+        >
+          <span style={{ 
+            fontSize: '20px',
+            animation: isHovered ? 'rotate 1s ease-in-out infinite' : 'none'
+          }}>✨</span>
+          <span style={{ fontSize: '14px', fontWeight: '600', color: 'white', whiteSpace: 'nowrap' }}>
+            AI Planting Visualiser
+          </span>
+        </button>
+      </div>
+      
+      {/* CSS Animations */}
+      <style>{`
+        @keyframes growVineLeft {
+          from {
+            transform: scaleY(0);
+            opacity: 0;
+          }
+          to {
+            transform: scaleY(1);
+            opacity: 1;
+          }
+        }
+        
+        @keyframes growVineRight {
+          from {
+            transform: scaleY(0);
+            opacity: 0;
+          }
+          to {
+            transform: scaleY(1);
+            opacity: 1;
+          }
+        }
+        
+        @keyframes floatFlower {
+          0%, 100% {
+            transform: translateY(0) rotate(0deg);
+          }
+          50% {
+            transform: translateY(-8px) rotate(10deg);
+          }
+        }
+        
+        @keyframes sparkle {
+          0%, 100% {
+            opacity: 1;
+            transform: translateX(-50%) scale(1);
+          }
+          50% {
+            opacity: 0.5;
+            transform: translateX(-50%) scale(1.3);
+          }
+        }
+        
+        @keyframes rotate {
+          0%, 100% {
+            transform: rotate(0deg);
+          }
+          25% {
+            transform: rotate(-10deg);
+          }
+          75% {
+            transform: rotate(10deg);
+          }
+        }
+      `}</style>
 
       {/* AI Helper Modal */}
       {isModalOpen && (
