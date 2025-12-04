@@ -9,7 +9,6 @@ export default function ProjectsHeader({
   viewMode,
   onViewModeChange,
   onCreateClick,
-  userInitials = 'JD',
 }) {
   return (
     <div className="flex justify-between items-center mb-8">
@@ -46,10 +45,6 @@ export default function ProjectsHeader({
           <Plus className="h-4 w-4 mr-2" />
           New Project
         </Button>
-
-        <Avatar>
-          <AvatarFallback>{userInitials}</AvatarFallback>
-        </Avatar>
       </div>
     </div>
   );

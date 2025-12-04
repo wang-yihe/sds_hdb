@@ -15,51 +15,51 @@ const Login = () => {
                 <div className="w-full h-full flex flex-col justify-center items-center gap-6 text-center p-8 relative z-0">
                     {/* Growing Plants GIF at Bottom - Inside White Container */}
                     <div className="absolute bottom-0 left-0 right-0 h-32 flex items-end pointer-events-none z-10 overflow-visible">
-                    <img 
-                        src="/flowers.gif" 
-                        alt="Growing Plants Animation" 
-                        className="h-[120%] w-auto object-cover opacity-80"
-                    />
-                    <img 
-                        src="/plants-growing.gif" 
-                        alt="Growing Plants Animation" 
-                        className="h-full w-auto object-cover opacity-80"
-                    />
-                    <img 
-                        src="/flowers.gif" 
-                        alt="Growing Plants Animation" 
-                        className="h-[120%] w-auto object-cover opacity-80"
-                    />
-                    <img 
-                        src="/plants-growing.gif" 
-                        alt="Growing Plants Animation" 
-                        className="h-full w-auto object-cover opacity-80"
-                    />
-                    <img 
-                        src="/plants-growing.gif" 
-                        alt="Growing Plants Animation" 
-                        className="h-full w-auto object-cover opacity-80"
-                    />
-                     <img 
-                        src="/flowers.gif" 
-                        alt="Growing Plants Animation" 
-                        className="h-[120%] w-auto object-cover opacity-80"
-                    />
-                    <img 
-                        src="/plants-growing.gif" 
-                        alt="Growing Plants Animation" 
-                        className="h-full w-auto object-cover opacity-80"
-                    />
-                    <img 
-                        src="/flowers.gif" 
-                        alt="Growing Plants Animation" 
-                        className="h-[120%] w-auto object-cover opacity-80"
-                    />
+                        <img 
+                            src={`${import.meta.env.BASE_URL}flowers.gif`}
+                            alt="Growing Plants Animation" 
+                            className="h-[120%] w-auto object-cover opacity-80"
+                        />
+                        <img 
+                            src={`${import.meta.env.BASE_URL}plants-growing.gif`}
+                            alt="Growing Plants Animation" 
+                            className="h-full w-auto object-cover opacity-80"
+                        />
+                        <img 
+                            src={`${import.meta.env.BASE_URL}flowers.gif`}
+                            alt="Growing Plants Animation" 
+                            className="h-[120%] w-auto object-cover opacity-80"
+                        />
+                        <img 
+                            src={`${import.meta.env.BASE_URL}plants-growing.gif`}
+                            alt="Growing Plants Animation" 
+                            className="h-full w-auto object-cover opacity-80"
+                        />
+                        <img 
+                            src={`${import.meta.env.BASE_URL}plants-growing.gif`}
+                            alt="Growing Plants Animation" 
+                            className="h-full w-auto object-cover opacity-80"
+                        />
+                        <img 
+                            src={`${import.meta.env.BASE_URL}flowers.gif`}
+                            alt="Growing Plants Animation" 
+                            className="h-[120%] w-auto object-cover opacity-80"
+                        />
+                        <img 
+                            src={`${import.meta.env.BASE_URL}plants-growing.gif`}
+                            alt="Growing Plants Animation" 
+                            className="h-full w-auto object-cover opacity-80"
+                        />
+                        <img 
+                            src={`${import.meta.env.BASE_URL}flowers.gif`}
+                            alt="Growing Plants Animation" 
+                            className="h-[120%] w-auto object-cover opacity-80"
+                        />
                     </div>
                     
                     {/* NeighbourBloom Logo */}
                     <img 
-                        src="/neighbourbloom-logo.png" 
+                        src={`${import.meta.env.BASE_URL}neighbourbloom-logo.png`}
                         alt="NeighbourBloom Logo" 
                         className="h-16 w-auto object-contain"
                     />
