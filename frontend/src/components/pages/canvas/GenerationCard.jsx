@@ -26,6 +26,11 @@ export class GenerationCardShapeUtil extends ShapeUtil {
     parentGenerationId: T.string,
   }
 
+  static migrations = {
+    currentVersion: 0,
+    migrators: {}
+  }
+
   getDefaultProps() {
     return {
       w: GENERATION_CARD_CONFIG.defaultSize.w,

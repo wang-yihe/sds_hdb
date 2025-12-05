@@ -1,7 +1,9 @@
 import os 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from core.config import get_settings
 from db.db import connect_to_db, close_db_connection
@@ -9,6 +11,7 @@ from routes.main_router import main_router
 
 env = get_settings().environment
 PORT = get_settings().app_port
+CANVAS_ASSET_DIR = get_settings().canvas_asset_dir
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -27,6 +30,12 @@ CORS_OPTIONS = {
 }
 
 app.add_middleware(CORSMiddleware, **CORS_OPTIONS)
+
+# Each project will have its own asset directory for images/videos
+canvas_assets_path = Path(CANVAS_ASSET_DIR)
+canvas_assets_path.mkdir(parents=True, exist_ok=True)
+
+app.mount("/canvas-assets", StaticFiles(directory=CANVAS_ASSET_DIR), name="canvas_assets")
 
 app.include_router(main_router)
 

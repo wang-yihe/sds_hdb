@@ -1,6 +1,6 @@
 # services/user_service.py
 from typing import List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from models.user_model import User
 from schemas.user_schema import UserCreate, UserUpdate, UserResponse
@@ -83,7 +83,7 @@ class UserService:
             update_data["password_hash"] = hash_password(update_data.pop("password"))
             update_data["must_change_password"] = False
         
-        update_data["updated_at"] = datetime.utcnow()
+        update_data["updated_at"] = datetime.now(timezone.utc)
         
         updated_user = await UserRepository.update_user(user_id, update_data)
         

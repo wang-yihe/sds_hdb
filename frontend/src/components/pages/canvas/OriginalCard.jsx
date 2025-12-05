@@ -19,6 +19,11 @@ export class OriginalCardShapeUtil extends ShapeUtil {
     prompt: T.string,
   }
 
+  static migrations = {
+    currentVersion: 0,
+    migrators: {}
+  }
+
   getDefaultProps() {
     return {
       w: ORIGINAL_CARD_CONFIG.defaultSize.w,

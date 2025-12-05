@@ -2,7 +2,7 @@ from models.project_model import Project
 from models.user_model import User
 from bson.objectid import ObjectId
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 class ProjectRepository:
     
@@ -55,7 +55,7 @@ class ProjectRepository:
             if thumbnail is not None:
                 project.thumbnail = thumbnail
             
-            project.updated_at = datetime.utcnow()
+            project.updated_at = datetime.now(timezone.utc)
             await project.save()
             return project
         except Exception as e:
@@ -88,7 +88,7 @@ class ProjectRepository:
             
             if user.id and user.id not in project.collaborator_ids:
                 project.collaborator_ids.append(user.id)
-                project.updated_at = datetime.utcnow()
+                project.updated_at = datetime.now(timezone.utc)
                 await project.save()
             
             return project
@@ -108,7 +108,7 @@ class ProjectRepository:
             
             if user.id and user.id in project.collaborator_ids:
                 project.collaborator_ids.remove(user.id)
-                project.updated_at = datetime.utcnow()
+                project.updated_at = datetime.now(timezone.utc)
                 await project.save()
             
             return project

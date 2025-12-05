@@ -4,7 +4,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 #import models
 from models.user_model import User
 from models.project_model import Project
-# from models.canvas import Canvas
+from models.canvas_model import Canvas
 
 from core.config import get_settings
 
@@ -14,7 +14,7 @@ DATABASE_NAME = get_settings().database_name
 document_models = [
     User,
     Project,
-    #Canvas,
+    Canvas,
     ]
 
 #Connection functions
@@ -46,6 +46,6 @@ async def close_db_connection():
 class DB: 
     User = User
     Project = Project
-    # Canvas = Canvas
+    Canvas = Canvas
     
 db = DB()

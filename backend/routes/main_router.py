@@ -4,7 +4,7 @@ from auth.auth_middleware import authenticate_jwt
 # Import all subroutes
 
 from sub_routes.auth_routes import app as auth_router
-# from sub_routes.canvas_routes import app as canvas_router
+from sub_routes.canvas_routes import app as canvas_router
 from sub_routes.user_routes import app as user_router
 from sub_routes.ai_routes import app as ai_router
 from sub_routes.project_routes import app as project_router
@@ -23,7 +23,7 @@ async def root():
 main_router.include_router(auth_router, prefix="/auth", tags=["auth"])
 
 # Protected Routes using JWT Authentication
-# main_router.include_router(canvas_router, prefix="/canvas", tags=["canvas"], dependencies=[Depends(authenticate_jwt)])
+main_router.include_router(canvas_router, prefix="/canvas", tags=["canvas"], dependencies=[Depends(authenticate_jwt)])
 main_router.include_router(user_router, prefix="/user", tags=["user"], dependencies=[Depends(authenticate_jwt)])
 main_router.include_router(ai_router, prefix="/ai", tags=["ai"], dependencies=[Depends(authenticate_jwt)])  
 main_router.include_router(project_router, prefix="/project", tags=["project"], dependencies=[Depends(authenticate_jwt)])

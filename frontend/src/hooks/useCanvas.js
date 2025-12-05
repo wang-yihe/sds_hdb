@@ -1,95 +1,71 @@
-import { useCallback, useEffect, useRef } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { 
-  selectTldrawDocument, 
-  selectCanvasTitle, 
-  selectHasUnsavedChanges,
-  selectCanvasApiState,
-  updateTldrawDocument,
-  setCanvasTitle,
-  markAsSaved,
-  setSaving 
-} from '@/store/slices/canvasSlice';
+// hooks/useCanvas.js
+import { useSelector, useDispatch } from "react-redux";
+import { useCallback, useEffect, useRef } from "react";
+import {
+  fetchCanvas,
+  saveCanvasData,
+  createCanvas,
+  clearCurrentCanvas,
+  updateLastSaved,
+  clearError,
+} from "@/store/slices/canvasSlice";
 
-export const useCanvas = () => {
+const useCanvas = (projectId) => {
   const dispatch = useDispatch();
-  const tldrawDocument = useSelector(selectTldrawDocument);
-  const canvasTitle = useSelector(selectCanvasTitle);
-  const hasUnsavedChanges = useSelector(selectHasUnsavedChanges);
-  const { isSaving, autoSave } = useSelector(selectCanvasApiState);
-  
-  const editorRef = useRef(null);
+  const { currentCanvas, loadingFlags, lastSaved, error } = useSelector(
+    (state) => state.canvas
+  );
+  const hasInitialized = useRef(false);
 
-  // Handle title change
-  const handleTitleChange = useCallback((e) => {
-    dispatch(setCanvasTitle(e.target.value));
-  }, [dispatch]);
+  // Initialize canvas once
+  useEffect(() => {
+    if (!projectId || hasInitialized.current) return;
 
-  // Save function
-  const handleSave = useCallback(async () => {
-    if (!editorRef.current) return;
-    
-    dispatch(setSaving(true));
-    try {
-      // Get current document from tldraw
-      const snapshot = editorRef.current.store.getSnapshot();
-      
-      // Here you would call your API to save
-      // await canvasAPI.saveCanvas({ title: canvasTitle, document: snapshot });
-      
-      console.log('Saving canvas:', { title: canvasTitle, document: snapshot });
-      
-      // Mark as saved
-      dispatch(markAsSaved());
-      alert('Canvas saved successfully!');
-    } catch (error) {
-      console.error('Save failed:', error);
-      alert('Failed to save canvas');
-    }
-  }, [dispatch, canvasTitle]);
-
-  // Handle editor changes
-  const handleEditorChange = useCallback((editor) => {
-    if (!editor) return;
-    
-    editorRef.current = editor;
-    
-    // Listen for document changes
-    const handleDocumentChange = () => {
-      const snapshot = editor.store.getSnapshot();
-      dispatch(updateTldrawDocument(snapshot));
+    const initializeCanvas = async () => {
+      try {
+        const result = await dispatch(fetchCanvas(projectId)).unwrap();
+        
+        if (!result.id || result.id === '') {
+          console.log("Canvas is empty, creating new canvas...");
+          await dispatch(createCanvas(projectId)).unwrap();
+        }
+      } catch (error) {
+        console.log("Failed to fetch canvas, creating empty canvas...");
+        try {
+          await dispatch(createCanvas(projectId)).unwrap();
+        } catch (createError) {
+          console.error("Failed to create canvas:", createError);
+        }
+      }
+      hasInitialized.current = true;
     };
 
-    // Subscribe to store changes
-    const unsubscribe = editor.store.listen(handleDocumentChange);
-    
-    return unsubscribe;
-  }, [dispatch]);
+    initializeCanvas();
+  }, [dispatch, projectId]);
 
-  // Auto-save effect
-  useEffect(() => {
-    if (autoSave && hasUnsavedChanges) {
-      const timer = setTimeout(() => {
-        handleSave();
-      }, 30000); // 30 seconds
-
-      return () => clearTimeout(timer);
-    }
-  }, [autoSave, hasUnsavedChanges, handleSave]);
-
-  // Load initial document
-  useEffect(() => {
-    if (tldrawDocument && editorRef.current) {
-      editorRef.current.store.loadSnapshot(tldrawDocument);
-    }
-  }, [tldrawDocument]);
+  const saveCanvas = useCallback(
+    async (canvasData) => {
+      if (!projectId) return;
+      
+      try {
+        await dispatch(saveCanvasData({ projectId, canvasData })).unwrap();
+        dispatch(updateLastSaved());
+      } catch (error) {
+        console.error("Failed to save canvas:", error);
+        throw error;
+      }
+    },
+    [dispatch, projectId]
+  );
 
   return {
-    canvasTitle,
-    hasUnsavedChanges,
-    isSaving,
-    handleTitleChange,
-    handleSave,
-    handleEditorChange
+    currentCanvas,
+    loadingFlags,
+    lastSaved,
+    error,
+    isInitialized: hasInitialized.current,
+    saveCanvas,
   };
 };
+
+export default useCanvas;

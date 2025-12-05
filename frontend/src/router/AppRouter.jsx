@@ -5,7 +5,6 @@ import LoginLayout from "@/layout/LoginLayout"
 import ProtectedRoute from "@/auth/ProtectedRoute"
 import PublicRoute from "@/auth/PublicRoute"
 import Canvas from "@/components/pages/canvas/canvas"
-import TestCanvas from "@/components/pages/test-canvas"
 import User from "@/components/pages/user/user"
 import Project from "@/components/pages/project/project"
 

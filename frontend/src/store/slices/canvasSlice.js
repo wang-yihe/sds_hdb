@@ -1,151 +1,134 @@
-import { createSlice } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { getCanvas, saveCanvas, deleteCanvas, createEmptyCanvas } from "@/api/canvasAPI";
 
 const initialState = {
-  // Canvas identification
-  canvasId: null,
-  canvasTitle: "Untitled Canvas",
-  
-  // tldraw document state (this is what tldraw uses)
-  tldrawDocument: null,
-  
-  // Save state tracking
-  hasUnsavedChanges: false,
-  lastSavedDocument: null,
-  
-  // API state
-  isLoading: false,
-  isSaving: false,
-  lastSaved: null,
-  error: null,
-  
-  // Auto-save settings
-  autoSave: true,
-  saveInterval: 30000, // 30 seconds
+    currentCanvas: null,
+    loadingFlags: {
+        isSaving: false,
+        isAwaitingResponse: false,
+    },
+    lastSaved: null,
+    error: null,
 };
 
+export const fetchCanvas = createAsyncThunk(
+    "canvas/fetchCanvas",
+    async (projectId, { rejectWithValue }) => {
+        try {
+            const response = await getCanvas(projectId);
+            return response.data;
+        } catch (error) {
+            return rejectWithValue(error.response?.data?.detail || "Failed to fetch canvas");
+        }
+    }
+);
+
+export const saveCanvasData = createAsyncThunk(
+    "canvas/saveCanvasData",
+    async ({ projectId, canvasData }, { rejectWithValue }) => {
+        try {
+            const response = await saveCanvas(projectId, canvasData);
+            return response.data;
+        } catch (error) {
+            return rejectWithValue(error.response?.data?.detail || "Failed to save canvas");
+        }
+    }
+);
+
+export const deleteCanvasData = createAsyncThunk(
+    "canvas/deleteCanvasData",
+    async (projectId, { rejectWithValue }) => {
+        try {
+            const response = await deleteCanvas(projectId);
+            return response.data;
+        } catch (error) {
+            return rejectWithValue(error.response?.data?.detail || "Failed to delete canvas");
+        }
+    }
+);
+
+export const createCanvas = createAsyncThunk(
+    "canvas/createCanvas",
+    async (projectId, { rejectWithValue }) => {
+        try {
+            const response = await createEmptyCanvas(projectId);
+            return response.data;
+        } catch (error) {
+            return rejectWithValue(error.response?.data?.detail || "Failed to create canvas");
+        }
+    }
+);
+
 const canvasSlice = createSlice({
-  name: "canvas",
-  initialState,
-  reducers: {
-    // Load canvas data from API
-    setCanvasData: (state, action) => {
-      const { canvasId, title, document } = action.payload;
-      state.canvasId = canvasId;
-      state.canvasTitle = title || "Untitled Canvas";
-      state.tldrawDocument = document;
-      state.lastSavedDocument = document ? JSON.parse(JSON.stringify(document)) : null;
-      state.hasUnsavedChanges = false;
-      state.error = null;
+    name: "canvas",
+    initialState,
+    reducers: {
+        clearCurrentCanvas: (state) => {
+            state.currentCanvas = null;
+            state.lastSaved = null;
+            state.error = null;
+        },
+        updateLastSaved: (state) => {
+            state.lastSaved = new Date().toISOString();
+        },
+        clearError: (state) => {
+            state.error = null;
+        },
     },
-
-    // Update canvas title
-    setCanvasTitle: (state, action) => {
-      state.canvasTitle = action.payload;
-      state.hasUnsavedChanges = true;
+    extraReducers: (builder) => {
+        builder
+            .addCase(fetchCanvas.pending, (state) => {
+                state.loadingFlags.isAwaitingResponse = true;
+                state.error = null;
+            })
+            .addCase(fetchCanvas.fulfilled, (state, action) => {
+                state.loadingFlags.isAwaitingResponse = false;
+                state.currentCanvas = action.payload;
+            })
+            .addCase(fetchCanvas.rejected, (state, action) => {
+                state.loadingFlags.isAwaitingResponse = false;
+                state.error = action.payload;
+            })
+            .addCase(saveCanvasData.pending, (state) => {
+                state.loadingFlags.isSaving = true;
+                state.error = null;
+            })
+            .addCase(saveCanvasData.fulfilled, (state, action) => {
+                state.loadingFlags.isSaving = false;
+                state.lastSaved = new Date().toISOString();
+            })
+            .addCase(saveCanvasData.rejected, (state, action) => {
+                state.loadingFlags.isSaving = false;
+                state.error = action.payload;
+            })
+            .addCase(deleteCanvasData.pending, (state) => {
+                state.loadingFlags.isSaving = true;
+                state.error = null;
+            })
+            .addCase(deleteCanvasData.fulfilled, (state) => {
+                state.loadingFlags.isSaving = false;
+                state.currentCanvas = null;
+                state.lastSaved = null;
+            })
+            .addCase(deleteCanvasData.rejected, (state, action) => {
+                state.loadingFlags.isSaving = false;
+                state.error = action.payload;
+            })
+            .addCase(createCanvas.pending, (state) => {
+                state.loadingFlags.isSaving = true;
+                state.error = null;
+            })
+            .addCase(createCanvas.fulfilled, (state, action) => {
+                state.loadingFlags.isSaving = false;
+                state.currentCanvas = action.payload;
+            })
+            .addCase(createCanvas.rejected, (state, action) => {
+                state.loadingFlags.isSaving = false;
+                state.error = action.payload;
+            });
     },
-
-    // Update tldraw document (called when tldraw changes)
-    updateTldrawDocument: (state, action) => {
-      state.tldrawDocument = action.payload;
-      state.hasUnsavedChanges = true;
-    },
-
-    // API state management
-    setLoading: (state, action) => {
-      state.isLoading = action.payload;
-    },
-
-    setSaving: (state, action) => {
-      state.isSaving = action.payload;
-    },
-
-    setError: (state, action) => {
-      state.error = action.payload;
-      state.isLoading = false;
-      state.isSaving = false;
-    },
-
-    clearError: (state) => {
-      state.error = null;
-    },
-
-    // Mark as saved after successful API call
-    markAsSaved: (state) => {
-      state.lastSavedDocument = state.tldrawDocument ? 
-        JSON.parse(JSON.stringify(state.tldrawDocument)) : null;
-      state.hasUnsavedChanges = false;
-      state.lastSaved = new Date().toISOString();
-      state.isSaving = false;
-      state.error = null;
-    },
-
-    // Auto-save settings
-    setAutoSave: (state, action) => {
-      state.autoSave = action.payload;
-    },
-
-    setSaveInterval: (state, action) => {
-      state.saveInterval = action.payload;
-    },
-
-    // Clear canvas
-    clearCanvas: (state) => {
-      state.tldrawDocument = null;
-      state.hasUnsavedChanges = true;
-    },
-
-    // Reset canvas
-    resetCanvas: (state) => {
-      return { 
-        ...initialState,
-        canvasId: state.canvasId,
-        canvasTitle: state.canvasTitle,
-      };
-    },
-
-    // Discard unsaved changes
-    discardChanges: (state) => {
-      state.tldrawDocument = state.lastSavedDocument ? 
-        JSON.parse(JSON.stringify(state.lastSavedDocument)) : null;
-      state.hasUnsavedChanges = false;
-    },
-  },
 });
 
-// Export actions
-export const {
-  setCanvasData,
-  setCanvasTitle,
-  updateTldrawDocument,
-  setLoading,
-  setSaving,
-  setError,
-  clearError,
-  markAsSaved,
-  setAutoSave,
-  setSaveInterval,
-  clearCanvas,
-  resetCanvas,
-  discardChanges,
-} = canvasSlice.actions;
+export const { clearCurrentCanvas, updateLastSaved, clearError } = canvasSlice.actions;
 
-// Export reducer
 export default canvasSlice.reducer;
-
-// Selectors
-export const selectCanvasId = (state) => state.canvas.canvasId;
-export const selectCanvasTitle = (state) => state.canvas.canvasTitle;
-export const selectTldrawDocument = (state) => state.canvas.tldrawDocument;
-export const selectHasUnsavedChanges = (state) => state.canvas.hasUnsavedChanges;
-export const selectCanvasApiState = (state) => ({
-  isLoading: state.canvas.isLoading,
-  isSaving: state.canvas.isSaving,
-  lastSaved: state.canvas.lastSaved,
-  error: state.canvas.error,
-  autoSave: state.canvas.autoSave,
-});
-export const selectElementsForSave = (state) => ({
-  canvasId: state.canvas.canvasId,
-  title: state.canvas.canvasTitle,
-  document: state.canvas.tldrawDocument,
-});

@@ -7,6 +7,7 @@ import { BrowserRouter } from 'react-router-dom';
 import '@/index.css'
 import { EntryPoint } from '@/EntryPoint.jsx'
 import AuthBootstrapper from './router/AuthBootstrapper';
+import 'tldraw/tldraw.css'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

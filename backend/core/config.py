@@ -4,7 +4,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """Application settings for SDS HDB App."""
-
+    # Storage Configuration
+    canvas_asset_dir: str = "storage/canvas_assets"
     # Server Configuration
     app_port: int = 8000
     app_base_path: str = ""

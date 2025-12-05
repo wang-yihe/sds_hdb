@@ -44,6 +44,11 @@ export class VideoCardShapeUtil extends ShapeUtil {
     sourceGenerationId: T.string,
     originalData: T.any,
   }
+  
+  static migrations = {
+    currentVersion: 0,
+    migrators: {}
+  }
 
   getDefaultProps() {
     return {
