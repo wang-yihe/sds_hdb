@@ -449,16 +449,16 @@ def generate_all_smart(
     s1_b64 = _open_as_base64(s1_path)  # read back as base64 for next stage input
 
     # 3) Stage 2
-    s2_path, s2_prompt, s2_mask = run_stage2_refine(
-        stage1_result_b64=s1_b64,
-        style_block=style_block,
-        species_block=species_block,
-        user_prompts=user_prompts,
-        green_overlay_b64=green_overlay_b64,
-        refine_mask_b64=None,  # you can pass a brush mask here instead
-        size=size,
-    )
-    s2_b64 = _open_as_base64(s2_path)
+    # s2_path, s2_prompt, s2_mask = run_stage2_refine(
+    #     stage1_result_b64=s1_b64,
+    #     style_block=style_block,
+    #     species_block=species_block,
+    #     user_prompts=user_prompts,
+    #     green_overlay_b64=green_overlay_b64,
+    #     refine_mask_b64=None,  # you can pass a brush mask here instead
+    #     size=size,
+    # )
+    # s2_b64 = _open_as_base64(s2_path)
 
     # # 4) Stage 3
     # s3_path, s3_prompt, s3_mask = run_stage3_blend(
