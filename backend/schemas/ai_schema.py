@@ -47,13 +47,23 @@ class Stage3Body(BaseModel):
 
 
 class GenerateAllSmartBody(BaseModel):
-    base_image_b64: str
+    # Changed from base_image_b64 to styleImages and perspectiveImages
+    styleImages: List[str] = []
+    perspectiveImages: List[str] = []
+    
+    # Keep the rest as is
     style_refs_b64: List[str] = []
     plant_refs_b64: List[str] = []
     user_prompts: List[PromptItem] = []
     green_overlay_b64: Optional[str] = None
     size: str = "1024x1024"
     stage3_use_soft_mask: bool = False
+    
+    # Optional fields for regeneration
+    selectedPlants: List[str] = []
+    prompt: str = ""
+    lassoSelection: Optional[dict] = None
+    regenerationPrompt: Optional[str] = None
 
 
 class MaskFromGreenBody(BaseModel):

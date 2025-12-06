@@ -13,6 +13,7 @@ import numpy as np
 import cv2
 from rembg import remove as rembg_remove
 import random
+from core.config import get_settings
 
 OUT_DIR = Path("./storage/generated_images")
 
@@ -35,7 +36,7 @@ def _get_headers_json() -> dict:
     """
     Headers for Chat Completions (GPT-4o / GPT-4o-mini vision).
     """
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = get_settings().OPENAI_API_KEY
     org = os.getenv("OPENAI_ORG")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY missing — add it to backend/.env")
@@ -53,7 +54,7 @@ def _get_headers_form() -> dict:
     """
     Headers for Images Edit / Images Generate (multipart/form-data).
     """
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = get_settings().OPENAI_API_KEY
     org = os.getenv("OPENAI_ORG")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY missing — add it to backend/.env")
@@ -78,11 +79,21 @@ def _raise_with_body(resp: requests.Response) -> None:
     print(f"[OPENAI ERROR] {resp.status_code} {resp.reason}: {body}", file=sys.stderr)
     resp.raise_for_status()
 
+def clean_base64(b64_str: str) -> str:
+    """Remove whitespace and newlines from base64 string."""
+    return ''.join(b64_str.split())
 
 def b64_to_data_url(b64_str: str, mime: str = "image/png") -> str:
-    """
-    Convert raw base64 (no prefix) into a data URL for vision messages.
-    """
+    """Convert base64 string to data URL."""
+    if b64_str.startswith('data:'):
+        return b64_str
+    
+    # Clean and fix padding
+    b64_str = clean_base64(b64_str)
+    missing_padding = len(b64_str) % 4
+    if missing_padding:
+        b64_str += '=' * (4 - missing_padding)
+    
     return f"data:{mime};base64,{b64_str}"
 
 
@@ -90,7 +101,7 @@ def b64_to_data_url(b64_str: str, mime: str = "image/png") -> str:
 # GPT-4o Vision (reads images → text)
 # ---------------------------
 
-def gpt_vision_summarize(messages: list, model: str = "gpt-5.1", max_tokens: int = 500) -> str:
+def gpt_vision_summarize(messages: list, model: str = "gpt-5-nano", max_tokens: int = 500) -> str:
     """
     Call Chat Completions with vision content.
     messages example:
@@ -115,7 +126,24 @@ def gpt_vision_summarize(messages: list, model: str = "gpt-5.1", max_tokens: int
 # ---------------------------
 # GPT Image Edit (makes final image)
 # ---------------------------
-
+def fix_base64_padding(b64_str: str) -> str:
+    """
+    Fix base64 padding issues by adding missing '=' characters.
+    Base64 strings must have length divisible by 4.
+    """
+    # Remove data URL prefix if present
+    if ',' in b64_str and b64_str.startswith('data:'):
+        b64_str = b64_str.split(',', 1)[1]
+    
+    # Remove any whitespace
+    b64_str = b64_str.strip()
+    
+    # Add padding if needed
+    missing_padding = len(b64_str) % 4
+    if missing_padding:
+        b64_str += '=' * (4 - missing_padding)
+    
+    return b64_str
 
 def gpt_image_edit(
     image_b64: str,
@@ -129,6 +157,7 @@ def gpt_image_edit(
     Ensures: mask is EXACTLY same size as image and is a PNG with transparency
     where transparent pixels indicate the editable area.
     """
+    image_b64 = fix_base64_padding(image_b64)
     # Decode base image -> normalize to PNG bytes (to avoid EXIF/orientation issues)
     img_bytes = base64.b64decode(image_b64)
     img_pil = Image.open(io.BytesIO(img_bytes)).convert("RGBA")
@@ -142,6 +171,7 @@ def gpt_image_edit(
     }
 
     if mask_b64:
+        mask_b64 = fix_base64_padding(mask_b64) #resolve the padding issue
         # Decode mask -> force to L, resize to (W,H), then convert to RGBA where:
         #   transparent = EDIT AREA (OpenAI edits here)
         #   opaque      = PRESERVE
@@ -174,7 +204,7 @@ def gpt_image_edit(
 
     data = {"prompt": prompt, "size": size, "model": model}
     headers = _get_headers_form()
-
+    print(data, headers)
     resp = requests.post("https://api.openai.com/v1/images/edits",
                          headers=headers, data=data, files=files, timeout=600)
     if not resp.ok:

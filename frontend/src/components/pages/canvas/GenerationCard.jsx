@@ -10,6 +10,7 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { GENERATION_CARD_CONFIG } from '../../../config/generationcardconfig'
 import { createVideoCardAsShapes } from './VideoCard'
+import { useGenerateAllSmart } from '@/hooks/useAi'
 
 // Shape Util class for Generation Card
 export class GenerationCardShapeUtil extends ShapeUtil {
@@ -24,6 +25,8 @@ export class GenerationCardShapeUtil extends ShapeUtil {
     timestamp: T.string,
     originalData: T.any,
     parentGenerationId: T.string,
+    isGenerating: T.boolean,
+    error: T.string,
   }
 
   static migrations = {
@@ -42,6 +45,8 @@ export class GenerationCardShapeUtil extends ShapeUtil {
       timestamp: GENERATION_CARD_CONFIG.defaultTimestamp(),
       originalData: {},
       parentGenerationId: '',
+      isGenerating: false,
+      error: '',
     }
   }
 
@@ -54,9 +59,10 @@ export class GenerationCardShapeUtil extends ShapeUtil {
   }
 
   component(shape) {
-    const { generationNumber, generatedImage, likes, comments, timestamp } = shape.props
+    const { generationNumber, generatedImage, likes, comments, timestamp, isGenerating, error } = shape.props
     
     const editor = useEditor()
+    const { generate } = useGenerateAllSmart()
     
     const [showComments, setShowComments] = useState(false)
     const [editMode, setEditMode] = useState(false)
@@ -68,13 +74,135 @@ export class GenerationCardShapeUtil extends ShapeUtil {
     const [isImageEnlarged, setIsImageEnlarged] = useState(false)
     const [selectedPlants, setSelectedPlants] = useState([])
     
+    // Add this new state for the Blob URL
+    const [displayImageUrl, setDisplayImageUrl] = useState(null)
+    
     const canvasRef = useRef(null)
     const imageRef = useRef(null)
     const enlargedCanvasRef = useRef(null)
     const enlargedImageRef = useRef(null)
 
     const parsedTimestamp = timestamp ? new Date(timestamp) : new Date()
-    const displayImage = generatedImage || GENERATION_CARD_CONFIG.placeholderImage
+    
+    // Convert base64 to Blob URL for display
+    useEffect(() => {
+      if (generatedImage) {
+        const base64ToBlobUrl = (base64String) => {
+          try {
+            const base64Data = base64String.replace(/^data:image\/\w+;base64,/, '')
+            const binaryString = atob(base64Data)
+            const bytes = new Uint8Array(binaryString.length)
+            
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i)
+            }
+            
+            const blob = new Blob([bytes], { type: 'image/png' })
+            return URL.createObjectURL(blob)
+          } catch (error) {
+            console.error('Failed to convert base64 to blob URL:', error)
+            return null
+          }
+        }
+
+        const blobUrl = base64ToBlobUrl(generatedImage)
+        setDisplayImageUrl(blobUrl)
+
+        return () => {
+          if (blobUrl) {
+            URL.revokeObjectURL(blobUrl)
+          }
+        }
+      } else {
+        setDisplayImageUrl(null)
+      }
+    }, [generatedImage])
+    
+    // Use displayImageUrl instead of generatedImage for rendering
+    const displayImage = displayImageUrl || GENERATION_CARD_CONFIG.placeholderImage
+
+    // Add a ref to track if generation has been initiated
+    const initialGenerationAttempted = useRef(false)
+
+    useEffect(() => {
+        // 1. Check if the initial attempt has been made
+        if (initialGenerationAttempted.current) {
+            return;
+        }
+        
+        const shouldGenerate = !generatedImage && 
+                              !isGenerating && 
+                              !error && 
+                              shape.props.originalData &&
+                              Object.keys(shape.props.originalData).length > 0
+
+        if (shouldGenerate) {
+            // 2. Set the flag before calling the function
+            initialGenerationAttempted.current = true;
+            handleAIGeneration()
+        }
+    }, []) // Only run once on mount (or twice in Strict Mode, but the ref stops the second dispatch)
+
+    const handleAIGeneration = async () => {
+      const { originalData } = shape.props
+
+      // Set generating state
+      editor.updateShapes([{
+        id: shape.id,
+        type: 'generationCard',
+        props: { 
+          ...shape.props, 
+          isGenerating: true,
+          error: ''
+        }
+      }])
+
+      try {
+        // Prepare generation form
+        const generationForm = {
+          styleImages: originalData.styleImages || [],
+          perspectiveImages: originalData.perspectiveImages || [],
+          selectedPlants: originalData.selectedPlants || originalData.plants || [],
+          prompt: originalData.prompt || '',
+          // Include regeneration data if this is a regeneration
+          lassoSelection: originalData.lassoSelection || null,
+          regenerationPrompt: originalData.regenerationPrompt || null,
+        }
+
+        console.log('Generating with:', generationForm)
+
+        // Call AI generation API
+        const result = await generate(generationForm).unwrap()
+
+        console.log('Generation result:', result)
+
+        // Update shape with generated image
+        editor.updateShapes([{
+          id: shape.id,
+          type: 'generationCard',
+          props: { 
+            ...shape.props, 
+            generatedImage: result,
+            isGenerating: false,
+            error: ''
+          }
+        }]
+        )
+      } catch (err) {
+        console.error('Generation failed:', err)
+        
+        // Update shape with error state
+        editor.updateShapes([{
+          id: shape.id,
+          type: 'generationCard',
+          props: { 
+            ...shape.props, 
+            isGenerating: false,
+            error: err.message || 'Generation failed'
+          }
+        }])
+      }
+    }
 
     // Calculate dynamic height based on what's visible
     const calculateHeight = () => {
@@ -151,7 +279,7 @@ export class GenerationCardShapeUtil extends ShapeUtil {
       document.body.removeChild(link)
     }
 
-    const handleRegenerate = () => {
+    const handleRegenerate = async () => {
       if (lassoPoints.length === 0 && !regenerationPrompt.trim()) return
       
       console.log('Regenerating with:', {
@@ -180,7 +308,7 @@ export class GenerationCardShapeUtil extends ShapeUtil {
           w: GENERATION_CARD_CONFIG.defaultSize.w,
           h: GENERATION_CARD_CONFIG.defaultSize.h,
           generationNumber: newGenerationNumber,
-          generatedImage: GENERATION_CARD_CONFIG.regeneratedPlaceholder, // Placeholder for regenerated image
+          generatedImage: generatedImage || '', // Will be filled by AI generation
           likes: 0,
           comments: [],
           timestamp: GENERATION_CARD_CONFIG.defaultTimestamp(),
@@ -191,6 +319,8 @@ export class GenerationCardShapeUtil extends ShapeUtil {
             selectedPlants: selectedPlants
           },
           parentGenerationId: shape.id,
+          isGenerating: false, // Will trigger on mount
+          error: '',
         },
       }])
       
@@ -427,54 +557,123 @@ export class GenerationCardShapeUtil extends ShapeUtil {
           <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column' }}>
             {/* Generated Image */}
             <div style={{ marginBottom: '16px', position: 'relative' }}>
-              <img 
-                ref={imageRef}
-                src={displayImage}
-                alt="Generated" 
-                onClick={handleImageClick}
-                style={{ 
-                  width: '100%', 
-                  height: '250px', 
-                  objectFit: 'cover', 
-                  borderRadius: '8px',
-                  display: 'block',
-                  cursor: editMode ? 'default' : 'pointer'
-                }}
-              />
-              {editMode && (
-                <canvas
-                  ref={canvasRef}
-                  onPointerDown={startLasso}
-                  onPointerMove={drawLasso}
-                  onPointerUp={endLasso}
-                  onPointerLeave={endLasso}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '250px',
-                    borderRadius: '8px',
-                    cursor: isLassoActive ? 'crosshair' : 'default',
-                    pointerEvents: isLassoActive ? 'auto' : 'none',
-                    touchAction: 'none'
-                  }}
-                />
-              )}
-              {displayImage.includes('unsplash') && (
+              {isGenerating ? (
                 <div style={{
-                  position: 'absolute',
-                  top: '8px',
-                  right: '8px',
-                  padding: '4px 12px',
-                  background: 'rgba(0, 0, 0, 0.7)',
-                  color: 'white',
-                  borderRadius: '12px',
-                  fontSize: '11px',
-                  fontWeight: '500'
+                  width: '100%',
+                  height: '250px',
+                  borderRadius: '8px',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'column',
+                  gap: '12px'
                 }}>
-                  📷 Placeholder
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    border: '4px solid rgba(255,255,255,0.3)',
+                    borderTop: '4px solid white',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                  <div style={{ color: 'white', fontSize: '14px', fontWeight: '500' }}>
+                    Generating your landscape...
+                  </div>
                 </div>
+              ) : error ? (
+                <div style={{
+                  width: '100%',
+                  height: '250px',
+                  borderRadius: '8px',
+                  background: '#fee2e2',
+                  border: '2px solid #ef4444',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  padding: '20px'
+                }}>
+                  <div style={{ fontSize: '32px' }}>⚠️</div>
+                  <div style={{ color: '#dc2626', fontSize: '14px', fontWeight: '600' }}>
+                    Generation Failed
+                  </div>
+                  <div style={{ color: '#991b1b', fontSize: '12px', textAlign: 'center' }}>
+                    {error}
+                  </div>
+                  <button
+                    onPointerDown={(e) => {
+                      e.stopPropagation()
+                      handleAIGeneration()
+                    }}
+                    style={{
+                      marginTop: '8px',
+                      padding: '8px 16px',
+                      background: '#ef4444',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: '500'
+                    }}
+                  >
+                    🔄 Retry
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <img 
+                    ref={imageRef}
+                    src={displayImage}
+                    alt="Generated" 
+                    onClick={handleImageClick}
+                    style={{ 
+                      width: '100%', 
+                      height: '250px', 
+                      objectFit: 'cover', 
+                      borderRadius: '8px',
+                      display: 'block',
+                      cursor: editMode ? 'default' : 'pointer'
+                    }}
+                  />
+                  {editMode && (
+                    <canvas
+                      ref={canvasRef}
+                      onPointerDown={startLasso}
+                      onPointerMove={drawLasso}
+                      onPointerUp={endLasso}
+                      onPointerLeave={endLasso}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '250px',
+                        borderRadius: '8px',
+                        cursor: isLassoActive ? 'crosshair' : 'default',
+                        pointerEvents: isLassoActive ? 'auto' : 'none',
+                        touchAction: 'none'
+                      }}
+                    />
+                  )}
+                  {displayImage.includes('unsplash') && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '8px',
+                      right: '8px',
+                      padding: '4px 12px',
+                      background: 'rgba(0, 0, 0, 0.7)',
+                      color: 'white',
+                      borderRadius: '12px',
+                      fontSize: '11px',
+                      fontWeight: '500'
+                    }}>
+                      📷 Placeholder
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
@@ -482,15 +681,17 @@ export class GenerationCardShapeUtil extends ShapeUtil {
             <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
               <button
                 onPointerDown={handleLike}
+                disabled={isGenerating}
                 style={{
                   flex: 1,
                   padding: '10px',
-                  background: '#f3f4f6',
+                  background: isGenerating ? '#e5e7eb' : '#f3f4f6',
                   border: 'none',
                   borderRadius: '8px',
-                  cursor: 'pointer',
+                  cursor: isGenerating ? 'not-allowed' : 'pointer',
                   fontSize: '13px',
                   fontWeight: '500',
+                  opacity: isGenerating ? 0.5 : 1
                 }}
               >
                 ❤️ {likes}
@@ -501,15 +702,17 @@ export class GenerationCardShapeUtil extends ShapeUtil {
                   console.log('Comments button clicked')
                   setShowComments(!showComments)
                 }}
+                disabled={isGenerating}
                 style={{
                   flex: 1,
                   padding: '10px',
-                  background: GENERATION_CARD_CONFIG.colors.muted,
+                  background: isGenerating ? '#e5e7eb' : GENERATION_CARD_CONFIG.colors.muted,
                   border: 'none',
                   borderRadius: '8px',
-                  cursor: 'pointer',
+                  cursor: isGenerating ? 'not-allowed' : 'pointer',
                   fontSize: '13px',
                   fontWeight: '500',
+                  opacity: isGenerating ? 0.5 : 1
                 }}
               >
                 💬 {comments.length}
@@ -520,31 +723,35 @@ export class GenerationCardShapeUtil extends ShapeUtil {
                   console.log('Edit button clicked')
                   setEditMode(!editMode)
                 }}
+                disabled={isGenerating}
                 style={{
                   flex: 1,
                   padding: '10px',
-                  background: editMode ? GENERATION_CARD_CONFIG.colors.primary : GENERATION_CARD_CONFIG.colors.muted,
+                  background: editMode ? GENERATION_CARD_CONFIG.colors.primary : (isGenerating ? '#e5e7eb' : GENERATION_CARD_CONFIG.colors.muted),
                   color: editMode ? GENERATION_CARD_CONFIG.colors.headerText : '#374151',
                   border: 'none',
                   borderRadius: '8px',
-                  cursor: 'pointer',
+                  cursor: isGenerating ? 'not-allowed' : 'pointer',
                   fontSize: '13px',
                   fontWeight: '500',
+                  opacity: isGenerating ? 0.5 : 1
                 }}
               >
                 ✏️ Edit
               </button>
               <button
                 onPointerDown={handleExport}
+                disabled={isGenerating}
                 style={{
                   flex: 1,
                   padding: '10px',
-                  background: GENERATION_CARD_CONFIG.colors.muted,
+                  background: isGenerating ? '#e5e7eb' : GENERATION_CARD_CONFIG.colors.muted,
                   border: 'none',
                   borderRadius: '8px',
-                  cursor: 'pointer',
+                  cursor: isGenerating ? 'not-allowed' : 'pointer',
                   fontSize: '13px',
                   fontWeight: '500',
+                  opacity: isGenerating ? 0.5 : 1
                 }}
               >
                 📥 Export
@@ -555,14 +762,15 @@ export class GenerationCardShapeUtil extends ShapeUtil {
             <div style={{ marginBottom: '16px' }}>
               <button
                 onPointerDown={handleGenerateVideo}
+                disabled={isGenerating}
                 style={{
                   width: '100%',
                   padding: '12px',
-                  background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                  background: isGenerating ? '#e5e7eb' : 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
-                  cursor: 'pointer',
+                  cursor: isGenerating ? 'not-allowed' : 'pointer',
                   fontSize: '14px',
                   fontWeight: '600',
                   display: 'flex',
@@ -570,8 +778,9 @@ export class GenerationCardShapeUtil extends ShapeUtil {
                   justifyContent: 'center',
                   gap: '8px',
                   transition: 'transform 0.2s',
+                  opacity: isGenerating ? 0.5 : 1
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                onMouseEnter={(e) => !isGenerating && (e.currentTarget.style.transform = 'scale(1.02)')}
                 onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
               >
                 🎬 Generate Video
@@ -579,7 +788,7 @@ export class GenerationCardShapeUtil extends ShapeUtil {
             </div>
 
             {/* Edit Mode */}
-              {editMode && (
+              {editMode && !isGenerating && (
               <div style={{
                 padding: '12px',
                 background: GENERATION_CARD_CONFIG.colors.infoBg,
@@ -819,6 +1028,14 @@ export class GenerationCardShapeUtil extends ShapeUtil {
             )}
           </div>
         </div>
+
+        {/* CSS for spinning animation */}
+        <style>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
       </HTMLContainer>
       {/* Render modal outside HTMLContainer using portal */}
       {isImageEnlarged && createPortal(
@@ -933,12 +1150,14 @@ export function createGenerationCardAsShapes(editor, data) {
         w: GENERATION_CARD_CONFIG.defaultSize.w,
         h: GENERATION_CARD_CONFIG.defaultSize.h,
         generationNumber: generationNumber || 1,
-        generatedImage: generatedImage || GENERATION_CARD_CONFIG.regeneratedPlaceholder, // Placeholder garden image
+        generatedImage: generatedImage || '', // Empty string triggers AI generation on mount
         likes: 0,
         comments: [],
         timestamp: GENERATION_CARD_CONFIG.defaultTimestamp(),
         originalData: originalData || {},
         parentGenerationId: parentGenerationId || '',
+        isGenerating: false, // Initialize to false
+        error: '', // Initialize to empty string
       },
     },
   ])

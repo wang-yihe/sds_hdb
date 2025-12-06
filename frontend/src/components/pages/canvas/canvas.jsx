@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import useTldrawCanvas from "@/hooks/useTldrawCanvas";
 import useCanvas from "@/hooks/useCanvas";
+import { useGenerateAllSmart } from "@/hooks/useAi";
 import AIHelper from "./AIHelper";
 import { OriginalCardShapeUtil } from "./OriginalCard";
 import { GenerationCardShapeUtil } from "./GenerationCard";
@@ -61,6 +62,7 @@ function CanvasContent() {
   const handleGenerate = async (data) => {
     if (!editor) return;
 
+    // Create original card with the input data
     await createOriginalCardAsShapes(editor, {
       position: { x: 100, y: 100 },
       styleImages: data.styleImages,
@@ -69,10 +71,11 @@ function CanvasContent() {
       prompt: data.prompt,
     });
 
+    // Create generation card - it will auto-trigger AI generation
     await createGenerationCardAsShapes(editor, {
       position: { x: 450, y: 100 },
       generationNumber: 1,
-      generatedImage: null,
+      generatedImage: '', // Empty string triggers auto-generation
       originalData: data,
     });
   };
@@ -84,15 +87,6 @@ function CanvasContent() {
 const Canvas = () => {
   const { projectId } = useParams();
   const { canvasSnapshot, isLoading } = useTldrawCanvas(projectId);
-
-  if (isLoading) {
-    return (
-      <div className="w-full h-screen flex items-center justify-center">
-        <div className="text-lg">Loading canvas...</div>
-      </div>
-    );
-  }
-
   return (
     <div className="w-full h-screen relative">
       <Tldraw 

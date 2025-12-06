@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     app_port: int = 8000
     app_base_path: str = ""
     environment: str = "development"  # "development" or "production"
+    
+    #API KEYS
+    OPENAI_API_KEY: str = ""
 
     # MongoDB Configuration
     mongodb_url: str = "mongodb://localhost:27017"

@@ -1,6 +1,6 @@
 from core.prompts import build_style_and_species_blocks
-from schemas.ai_schema import AnalyzeBody, DragPlaceBody, GenerateAllSmartBody, MaskFromGreenBody, PreviewMaskBody, Stage1Body, Stage2Body, Stage3Body
-from core.ai import OUT_DIR, _save_bytes, generate_all_smart, make_hard_and_soft_masks_from_green, run_stage1_layout, _prompt_list_to_dicts, run_stage2_refine, run_stage3_blend
+from schemas.ai_schema import AnalyzeBody, DragPlaceBody, GenerateAllSmartBody, PreviewMaskBody, Stage1Body, Stage2Body, Stage3Body
+from core.ai import OUT_DIR, generate_all_smart, make_hard_and_soft_masks_from_green, run_stage1_layout, _prompt_list_to_dicts, run_stage2_refine, run_stage3_blend
 from pathlib import Path
 import base64
 from PIL import Image, ImageDraw
@@ -75,50 +75,56 @@ class AIService:
     @staticmethod
     async def generate_all_smart(body: GenerateAllSmartBody):
         try:
+            # Use the first style image or first perspective image as base
+            base_image = body.styleImages[0] if body.styleImages else (
+                body.perspectiveImages[0] if body.perspectiveImages else ""
+            )
+            
+            if not base_image:
+                raise ValueError("No base image provided")
+            
+            # Call the pipeline
             result = generate_all_smart(
-                base_image_b64=body.base_image_b64,
-                style_refs_b64=body.style_refs_b64,
-                plant_refs_b64=body.plant_refs_b64,
-                user_prompts=_prompt_list_to_dicts(body.user_prompts),
+                base_image_b64=base_image,
+                style_refs_b64=body.styleImages,
+                plant_refs_b64=body.plant_refs_b64 if body.plant_refs_b64 else [],
+                user_prompts=_prompt_list_to_dicts(body.user_prompts) if body.user_prompts else None,
                 green_overlay_b64=body.green_overlay_b64,
                 size=body.size,
                 stage3_use_soft_mask=body.stage3_use_soft_mask,
             )
-            # turn file system paths into URLs
+            
+            # Read the generated image file and convert to base64
+            final_path = result["finalPath"]
+            
+            with open(final_path, "rb") as f:
+                image_bytes = f.read()
+            
+            # Convert to base64
+            import base64
+            image_b64 = base64.b64encode(image_bytes).decode('utf-8')
+            
+            # Create data URL for frontend
+            image_data_url = f"data:image/png;base64,{image_b64}"
+            
+            # Return both the URL path and the base64 data
             def _p(path_str: str) -> str:
                 return f"/api/file/{Path(path_str).name}"
-
-            result["stage1"]["resultPath"] = _p(result["stage1"]["resultPath"])
-            #result["stage2"]["resultPath"] = _p(result["stage2"]["resultPath"])
-            # result["stage3"]["resultPath"] = _p(result["stage3"]["resultPath"])
-            result["finalPath"] = _p(result["finalPath"])
-            return result
-        except Exception as e:
-            raise e
-        
-    @staticmethod
-    async def mask_from_green(body: MaskFromGreenBody):
-        try:
-            hard_b64, soft_b64 = make_hard_and_soft_masks_from_green(
-                green_overlay_b64=body.green_overlay_b64,
-                base_image_b64=body.base_image_b64,
-                trunk_feather_px=body.trunk_feather_px,
-                canopy_grow_px_up=body.canopy_grow_px_up,
-                canopy_grow_px_radial=body.canopy_grow_px_radial,
-                down_grow_px_limit=body.down_grow_px_limit,
-            )
-            # Save masks for debugging/preview
-            hard_path = _save_bytes(hard_b64, "mask_hard")
-            soft_path = _save_bytes(soft_b64, "mask_soft")
+            
             return {
-                "ok": True,
-                "hardMaskB64": hard_b64,
-                "softMaskB64": soft_b64,
-                "hardMaskPath": f"/api/file/{Path(hard_path).name}",
-                "softMaskPath": f"/api/file/{Path(soft_path).name}",
+                "success": True,
+                "image": image_data_url,  # Base64 for immediate display
+                "stage1": {
+                    "resultPath": _p(result["stage1"]["resultPath"]),
+                    "prompt": result["stage1"]["prompt"],
+                },
+                "finalPath": _p(result["finalPath"]),
+                "style_block": result["style_block"],
+                "species_block": result["species_block"],
             }
+            
         except Exception as e:
-            raise e
+            raise Exception(f"Error generating all smart: {str(e)}")
         
     @staticmethod
     async def drag_place_plant(body: DragPlaceBody):

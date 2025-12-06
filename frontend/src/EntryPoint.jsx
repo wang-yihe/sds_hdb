@@ -5,7 +5,6 @@ export const EntryPoint =  () => {
   return (
     <>
       <AppRouter />
-      <GlobalLoader />
     </>
   )
 }
