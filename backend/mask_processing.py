@@ -75,40 +75,6 @@ def _force_size_l(mask_img: Image.Image, target_w: int, target_h: int) -> Image.
     m = m.point(lambda v: 255 if v >= 128 else 0).convert("L")
     return m
 
-# def _green_to_binary_mask(
-#     overlay_rgb: Image.Image,
-#     hsv_low=(35, 40, 40),
-#     hsv_high=(85, 255, 255),
-#     close_iters: int = 2,
-#     open_iters: int = 1,
-#     feather_radius: float = 1.5,
-# ) -> Image.Image:
-#     """
-#     Detect GREEN areas in the overlay via HSV threshold, clean edges,
-#     and return a single-channel (L) white-on-black binary mask.
-
-#     hsv_low/high cover most greens. Tweak if your paint colour differs.
-#     """
-#     rgb = np.array(overlay_rgb)  # HxWx3, RGB
-#     bgr = rgb[:, :, ::-1]        # OpenCV is BGR
-#     hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-
-#     low = np.array(hsv_low, dtype=np.uint8)
-#     high = np.array(hsv_high, dtype=np.uint8)
-
-#     mask = cv2.inRange(hsv, low, high)  # 255 where green
-
-#     # Morphological clean-up
-#     kernel = np.ones((5, 5), np.uint8)
-#     if close_iters > 0:
-#         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=close_iters)
-#     if open_iters > 0:
-#         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=open_iters)
-
-#     # Gentle feather for nicer blending, then binarize hard again
-#     mask_pil = Image.fromarray(mask).filter(ImageFilter.GaussianBlur(radius=feather_radius))
-#     mask_pil = mask_pil.point(lambda v: 255 if v > 16 else 0).convert("L")
-#     return mask_pil
 
 def _auto_color_to_binary_mask(
     overlay_rgb: Image.Image,
@@ -121,9 +87,6 @@ def _auto_color_to_binary_mask(
     Build a white-on-black binary mask from a COLORED overlay.
     Supports green or red paint; falls back to 'any strong color' via saturation.
     """
-    import cv2
-    import numpy as np
-    from PIL import ImageFilter
 
     rgb = np.array(overlay_rgb)       # HxWx3, RGB
     bgr = rgb[:, :, ::-1]             # OpenCV wants BGR
@@ -249,6 +212,8 @@ def make_hard_and_soft_masks_from_green(
     canopy_grow_px_up: int = 80,
     canopy_grow_px_radial: int = 12,
     down_grow_px_limit: int = 8,
+    erode_px: int = 3,
+    dilate_px: int = 0,
 ) -> Tuple[str, str]:
     """
     Convert green overlay to:
@@ -272,13 +237,6 @@ def make_hard_and_soft_masks_from_green(
     overlay_rgba = _b64_to_pil(green_overlay_b64)
     overlay_rgb = _rgba_to_rgb(overlay_rgba)
 
-    # base_green_mask = _green_to_binary_mask(
-    #     overlay_rgb,
-    #     hsv_low=hsv_low,
-    #     hsv_high=hsv_high,
-    #     feather_radius=1.5,
-    # )
-
     base_green_mask = _auto_color_to_binary_mask(
         overlay_rgb,
         prefer="auto",   # will try green -> red -> any
@@ -287,6 +245,18 @@ def make_hard_and_soft_masks_from_green(
 
     # 2) Build HARD and SOFT masks
     hard_mask = _make_hard_mask(base_green_mask, trunk_feather_px=trunk_feather_px)
+
+
+    if erode_px and erode_px > 0:
+        k = erode_px * 2 + 1
+        hard_mask = hard_mask.filter(ImageFilter.MinFilter(k))
+    if dilate_px and dilate_px > 0:
+        k = dilate_px * 2 + 1
+        hard_mask = hard_mask.filter(ImageFilter.MaxFilter(k))
+
+    hard_mask = hard_mask.point(lambda v: 255 if v >= 128 else 0).convert("L")
+
+
     soft_mask = _make_soft_canopy_mask(
         hard_mask,
         canopy_grow_px_up=canopy_grow_px_up,

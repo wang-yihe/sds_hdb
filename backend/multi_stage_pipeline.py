@@ -25,6 +25,7 @@ import cv2
 import numpy as np
 from pathlib import Path
 from typing import List, Optional, Tuple
+from datetime import datetime
 
 import random
 from PIL import ImageFilter
@@ -69,50 +70,19 @@ def _normalize_mask_L(mask_b64: str, W: int, H: int) -> Image.Image:
         arr = 255 - arr
     return Image.fromarray(arr, "L")
 
-def _lmask_to_openai_rgba(mask_L: Image.Image) -> bytes:
-    """OpenAI edits where alpha==0 (transparent). Convert WHITE(255)=edit -> alpha 0."""
-    W, H = mask_L.size
-    arr = np.array(mask_L, np.uint8)
-    alpha = np.where(arr == 255, 0, 255).astype(np.uint8)
-    rgba = np.zeros((H, W, 4), np.uint8)
-    rgba[..., 3] = alpha
-    im = Image.fromarray(rgba, "RGBA")
-    buf = io.BytesIO(); im.save(buf, "PNG")
-    return buf.getvalue()
 
-def _clamp_to_mask_keep_outside(base_b64: str, gen_b64: str, mask_b64: str) -> str:
-    """Hard guarantee: base outside mask + gen inside mask."""
-    def b64_to_cv(b):
-        a = np.frombuffer(base64.b64decode(b), np.uint8)
-        return cv2.imdecode(a, cv2.IMREAD_COLOR)
-    base = b64_to_cv(base_b64); gen = b64_to_cv(gen_b64)
-    Hb, Wb = base.shape[:2]
-    if gen.shape[:2] != (Hb, Wb):
-        gen = cv2.resize(gen, (Wb, Hb), interpolation=cv2.INTER_CUBIC)
-    mL = _normalize_mask_L(mask_b64, Wb, Hb)
-    mask = (np.array(mL) == 255)
-    out = base.copy(); out[mask] = gen[mask]
-    ok, enc = cv2.imencode(".png", out)
-    return base64.b64encode(enc.tobytes()).decode()
-
-def _lab_color_transfer(src_b64: str, ref_b64: str) -> str:
-    """Re-tone src to match ref (photographic look)."""
-    def b64_to_cv(b):
-        a = np.frombuffer(base64.b64decode(b), np.uint8)
-        return cv2.imdecode(a, cv2.IMREAD_COLOR)
-    src = b64_to_cv(src_b64); ref = b64_to_cv(ref_b64)
-    H, W = src.shape[:2]
-    ref = cv2.resize(ref, (W, H), cv2.INTER_AREA)
-    s = cv2.cvtColor(src, cv2.COLOR_BGR2LAB).astype(np.float32)
-    r = cv2.cvtColor(ref, cv2.COLOR_BGR2LAB).astype(np.float32)
-    s_m, s_s = cv2.meanStdDev(s); r_m, r_s = cv2.meanStdDev(r)
-    s_s = np.where(s_s < 1e-6, 1.0, s_s); r_s = np.where(r_s < 1e-6, 1.0, r_s)
-    out = (s - s_m.reshape(1,1,3)) * (r_s / s_s) + r_m.reshape(1,1,3)
-    out = np.clip(out, 0, 255).astype(np.uint8)
-    out = cv2.cvtColor(out, cv2.COLOR_LAB2BGR)
-    ok, enc = cv2.imencode(".png", out); return base64.b64encode(enc.tobytes()).decode()
-
-
+def _ensure_same_size_mask(mask_b64: str, base_b64: str) -> str:
+    if not mask_b64: return None
+    b_bytes = base64.b64decode(base_b64)
+    m_bytes = base64.b64decode(mask_b64)
+    b = Image.open(io.BytesIO(b_bytes))
+    m = Image.open(io.BytesIO(m_bytes))
+    if m.size != b.size:
+        # Nearest to avoid grey edges; we need binary mask fidelity
+        m = m.convert("L").resize(b.size, Image.NEAREST)
+        buf = io.BytesIO(); m.save(buf, "PNG")
+        return base64.b64encode(buf.getvalue()).decode("utf-8")
+    return mask_b64
 
 
 def _alpha_cutout(ref_b64: str) -> Image.Image:
@@ -179,7 +149,10 @@ def _save_b64_png(b64: str, prefix: str) -> str:
     Save a base64 PNG into OUT_DIR with a short UUID filename.
     Falls back to /tmp if Errno 63 (filename too long) or similar occurs.
     """
-    name = f"{prefix}_{uuid.uuid4().hex}.png"
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    name = f"{prefix}_{timestamp}.png"
     p = OUT_DIR / name
     raw = base64.b64decode(b64)
 
@@ -228,13 +201,6 @@ def _open_as_base64(path_or_b64: str) -> str:
     return path_or_b64
 
 
-WEIGHTS = {
-    "perspective": 1.0,  # hard-clamped
-    "style": 0.9,
-    "plants": 0.7,
-    "mask": 1.0,         # hard rule
-    "prompt": 0.3,
-}
 
 # -----------------------
 # Stage 1
@@ -251,7 +217,7 @@ def run_stage1_layout(
     """
     Stage 1: layout + style + canopy freedom.
     - Builds prompt (Option B) for Stage 1.
-    - If green overlay is provided, derive SOFT mask (for canopy freedom).
+    - If green overlay is provided, derive HARD mask (for canopy freedom).
     - Returns (out_path, final_prompt, mask_used_b64).
     """
     # Build user block
@@ -259,38 +225,22 @@ def run_stage1_layout(
 
     # Build prompt
     prompt = compose_stage1_prompt(style_block, species_block, user_block)
-    # prompt = build_weighted_prompt(
-    #     style_block=style_block if WEIGHTS["style"] > 0 else "",
-    #     species_block=species_block if WEIGHTS["plants"] > 0 else "",
-    #     user_prompts_block=user_block if WEIGHTS["prompt"] > 0 else "",
-    # )
+
     # Mask logic
     mask_b64 = None
     if green_overlay_b64:
-        _, soft_b64 = make_hard_and_soft_masks_from_green(
+        hard_b64, soft_b64 = make_hard_and_soft_masks_from_green(
             green_overlay_b64=green_overlay_b64,
             base_image_b64=base_image_b64,
-            canopy_grow_px_up=20,        # tighter vertical allowance
-            canopy_grow_px_radial=4,     # tighter sideways allowance
-            down_grow_px_limit=6,
+            canopy_grow_px_up=0,        # tighter vertical allowance
+            canopy_grow_px_radial=0,     # tighter sideways allowance
+            down_grow_px_limit=0,
+            erode_px = 6,
+            dilate_px = 0,
         )
-        mask_b64 = soft_b64  # canopy freedom
+        mask_b64 = hard_b64  # canopy freedom
 
-    # guided_b64 = base_image_b64
-    # if WEIGHTS["plants"] > 0:
-    #     # density & alpha scale by weight
-    #     density = max(4, int(14 * WEIGHTS["plants"]))        # 0.7 → ~9–10
-    #     alpha   = int(200 * WEIGHTS["plants"])               # 0..255
-    #     if mask_b64 and plant_refs_b64_global:               # set via generate_all_smart
-    #         guided_b64 = build_plant_guide(
-    #             base_b64=base_image_b64,
-    #             mask_b64=mask_b64,
-    #             plant_refs_b64=plant_refs_b64_global,
-    #             density=density,
-    #             alpha=alpha,
-    #             scale_range=(0.75, 1.25),
-    #         )
-
+    mask_b64 = _ensure_same_size_mask(mask_b64, base_image_b64)
 
     # Call image edit
     out_b64 = gpt_image_edit(
@@ -298,16 +248,9 @@ def run_stage1_layout(
         prompt=prompt,
         mask_b64=mask_b64,
         size=size,
+        edit_opaque_area = False
     )
 
-    # if mask_b64:
-    #     out_b64 = _clamp_to_mask_keep_outside(base_image_b64, out_b64, mask_b64)
-
-    # # Photographic tone match back to base
-    # try:
-    #     out_b64 = _lab_color_transfer(out_b64, base_image_b64)
-    # except Exception:
-    #     pass
 
     out_path = _save_b64_png(out_b64, "stage1")
 
@@ -408,6 +351,7 @@ def generate_all_smart(
     style_refs_b64: List[str],
     plant_refs_b64: List[str],
     user_prompts: Optional[List[dict]] = None,
+    species_name: Optional[str] = None,
     green_overlay_b64: Optional[str] = None,
     size: str = "1024x1024",
     stage3_use_soft_mask: bool = False,
@@ -435,6 +379,7 @@ def generate_all_smart(
         base_image_b64=base_image_b64,
         style_refs_b64=style_refs_b64,
         plant_refs_b64=plant_refs_b64,
+        species_hint=species_name,
     )
 
     # 2) Stage 1

@@ -1,9 +1,20 @@
 import os, base64, requests, sys
 from typing import Optional
 from dotenv import load_dotenv
+from PIL import Image
+import numpy as np
+import cv2
 
 # Load .env from this backend folder explicitly
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
+
+
+def _erode_binary_pil(pil_L, px=4):
+    arr = np.array(pil_L)  # 0..255
+    bin = (arr >= 128).astype("uint8") * 255
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (px, px))
+    eroded = cv2.erode(bin, kernel, iterations=1)
+    return Image.fromarray(eroded, mode="L")
 
 
 def _get_headers_json() -> dict:
@@ -65,7 +76,7 @@ def b64_to_data_url(b64_str: str, mime: str = "image/png") -> str:
 # GPT-4o Vision (reads images → text)
 # ---------------------------
 
-def gpt_vision_summarize(messages: list, model: str = "gpt-5.1", max_tokens: int = 500) -> str:
+def gpt_vision_summarize(messages: list, model: str = "gpt-4o-mini", max_tokens: int = 500) -> str:
     """
     Call Chat Completions with vision content.
     messages example:
@@ -98,7 +109,12 @@ def gpt_image_edit(
     prompt: str,
     mask_b64: Optional[str] = None,
     size: str = "1024x1024",
-    model: str = "gpt-image-1"
+    model: str = "gpt-image-1",
+    strict_hard_mask=True,
+    feather_px=0,
+    dilate_px=0,
+    letterbox_square=True,
+    edit_opaque_area: bool = False,
 ) -> str:
     """
     Calls OpenAI Images Edit API and returns base64 PNG string (no data URL).
@@ -129,6 +145,9 @@ def gpt_image_edit(
         if m_pil.size != (W, H):
             m_pil = m_pil.resize((W, H), Image.NEAREST)
 
+        # Tighten the mask so the model can’t “paint” over bed edges
+        m_pil = _erode_binary_pil(m_pil, px=4)
+
         # Ensure hard 0/255
         m_pil = m_pil.point(lambda v: 255 if v >= 128 else 0).convert("L")
 
@@ -137,7 +156,15 @@ def gpt_image_edit(
         #   opaque      = keep      -> alpha = 255 where m_pil==0
         import numpy as np
         arr = np.array(m_pil)  # 0 or 255
-        alpha = np.where(arr == 255, 0, 255).astype("uint8")  # invert to transparency
+        
+        if edit_opaque_area:
+            # White(255) => alpha 0 (editable), Black(0) => alpha 255 (keep)
+            alpha = np.where(arr == 255, 255, 0).astype("uint8")
+        else:
+            # Default OpenAI semantics (transparent = editable):
+            # White(255) => alpha 0 (editable), Black(0) => alpha 255 (keep)
+            alpha = np.where(arr == 255, 0, 255).astype("uint8")
+
         rgba = np.zeros((H, W, 4), dtype="uint8")
         rgba[..., 3] = alpha  # only alpha matters
         mask_rgba = Image.fromarray(rgba, mode="RGBA")
@@ -151,8 +178,16 @@ def gpt_image_edit(
         # helpful debug
         print(f"[gpt_image_edit] base size: {W}x{H}, mask size: {mask_rgba.size[0]}x{mask_rgba.size[1]}")
 
+
     data = {"prompt": prompt, "size": size, "model": model}
     headers = _get_headers_form()
+
+    print("before")
+    if os.getenv("DEBUG_IMAGE_EDITS"):
+        print("hereh")
+        with open("/tmp/edit_base.png", "wb") as f: f.write(img_png_bytes)
+        if "mask" in files:
+            with open("/tmp/edit_mask.png", "wb") as f: f.write(mask_png_bytes)
 
     resp = requests.post("https://api.openai.com/v1/images/edits",
                          headers=headers, data=data, files=files, timeout=600)

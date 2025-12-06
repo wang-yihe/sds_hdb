@@ -37,11 +37,43 @@ _STYLE_SYS_MSG = (
     "No extra commentary."
 )
 
+def _inject_species_hint(species_block: str, hint: Optional[str]) -> str:
+    """Insert a mandatory species constraint into the [PLANT_SPECIES] block."""
+    if not hint:
+        return species_block
+    hint = hint.strip()
+    if not hint:
+        return species_block
+
+    # Ensure we have a header we can inject under
+    if "[PLANT_SPECIES]" not in species_block.upper():
+        species_block = "[PLANT_SPECIES]\n" + species_block.strip()
+
+    lines = species_block.splitlines()
+    # Find the header line (case-insensitive)
+    header_idx = next(
+        (i for i, ln in enumerate(lines) if ln.strip().upper() == "[PLANT_SPECIES]"),
+        0
+    )
+    insert_idx = header_idx + 1
+
+    hint_block = [
+        f"PRIORITY SPECIES CONSTRAINT: '{hint}'.",
+        "- Treat as mandatory. If any uploaded plant refs conflict, prefer this species.",
+        "- Match true morphology (trunk thickness/rings, crown architecture, leaf/frond shape, color, size).",
+        "- Use only vegetation; do not add benches, planters, or other hardscape.",
+        "- Use Singapore-suitable species and realistic horticultural density.",
+        ""
+    ]
+    lines[insert_idx:insert_idx] = hint_block
+    return "\n".join(lines)
+
 def build_style_and_species_blocks(
     base_image_b64: str,
     style_refs_b64: List[str],
     plant_refs_b64: List[str],
-    vision_model: str = "gpt-4o-mini",
+    species_hint: Optional[str] = None,
+    vision_model: str = "gpt-5.1",
     max_tokens: int = 650
 ) -> Tuple[str, str]:
     """
@@ -56,6 +88,12 @@ def build_style_and_species_blocks(
         {"type": "text", "text": "PERSPECTIVE (context for scale/lighting):"},
         {"type": "image_url", "image_url": {"url": b64_to_data_url(base_image_b64)}},
     ]
+
+    if species_hint:
+        content.append({
+            "type": "text",
+            "text": f"TARGET SPECIES (strong hint, mandatory if plausible): {species_hint}"
+        })
 
     if style_refs_b64:
         content.append({"type": "text", "text": "STYLE REFERENCES (same style theme):"})
@@ -92,6 +130,8 @@ def build_style_and_species_blocks(
         # Fallback: if formatting differs, return whole as style, empty species.
         style_block = raw.strip()
         species_block = ""
+
+    species_block = _inject_species_hint(species_block, species_hint)
 
     return style_block, species_block
 
@@ -141,6 +181,16 @@ _SHARED_PERSPECTIVE_ANALYSIS = (
     "- The perspective image is the PRIMARY reference source. Style references are SECONDARY (mood only).\n"
 )
 
+_SHARED_COMMON_KNOWN = (
+    "Edit only the transparent (editable) pixels.\n"
+    "Do not modify any opaque/kept pixel.\n"
+    "Do not add or change hardscape: no planters, curbs, edging, benches, walls, railings, or paving.\n"
+    "Only add living plants inside the editable zones. Roots/bases must sit fully within the editable area.\n"
+    "Keep the background, horizon, buildings, and sky unchanged.\n"
+    "Use realistic lighting and materials that match the base photo. Avoid plastic or cartoony look.\n"
+    "Prefer Singapore-suitable plantings. Maintain perspective and scale consistent with the base image.\n"
+)
+
 _SHARED_HARDSCAPE_RULES = (
     "HARDSCAPE (pixel-locked outside mask):\n"
     "- Preserve buildings, skyline, parapet walls, railings, benches, paving/tiles, planter edges.\n"
@@ -156,6 +206,15 @@ _SHARED_FORM_RULES = (
     "  • Keep trunk base fully visible at soil line; avoid mound-shaped occlusion or bushy bases.\n"
     "  • Respect planter footprint exactly; no foliage spilling onto tiles, benches, or walls.\n"
     "  • Foliage silhouettes must match the natural growth habit of the species.\n"
+)
+
+_MASK_RULES_BLOCK = (
+"MASK RULES (CRITICAL — DO NOT VIOLATE):\n"
+"- Only place vegetation inside the editable mask area.\n"
+"- Never modify or add anything outside the mask (treat outside as LOCKED).\n"
+"- Do not extend soil, planters, or foliage beyond mask boundaries.\n"
+"- Background buildings, sky, railings, walls, and flooring must remain unchanged.\n"
+"- Preserve the base image’s camera angle, perspective lines, horizon, and lighting.\n"
 )
 
 _SHARED_SPECIES_RULES = (
@@ -234,6 +293,9 @@ def compose_stage1_prompt(
         _SHARED_PERSPECTIVE_ANALYSIS,
         "",
 
+        _SHARED_COMMON_KNOWN,
+        "",
+
         # HARD GEOMETRY LOCK (keep your existing block)
         _SHARED_HARDSCAPE_RULES,
         "",
@@ -255,6 +317,9 @@ def compose_stage1_prompt(
 
         # YOUR EXISTING ZONE RULES (still okay)
         _SHARED_PLANTING_ZONE_RULES,
+        "",
+
+        _MASK_RULES_BLOCK,
         "",
 
         # STYLE BLOCK (but demoted to vibe-only)

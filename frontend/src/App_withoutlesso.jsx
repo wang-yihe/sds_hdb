@@ -17,7 +17,6 @@ export default function App() {
   const [styles, setStyles] = useState([]);
   const [plants, setPlants] = useState([]);
   const [greenMask, setGreenMask] = useState(null);
-  const [speciesName, setSpeciesName] = useState("");
 
   const [maskPreviewUrl, setMaskPreviewUrl] = useState(null);
   const [hardMaskUrl, setHardMaskUrl] = useState(null);
@@ -28,7 +27,6 @@ export default function App() {
 
   const [previewUrl, setPreviewUrl] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [showEditor, setShowEditor] = useState(false);
 
   async function handleUpload(e, setter, multiple = false) {
     const files = e.target.files;
@@ -74,7 +72,6 @@ export default function App() {
         category: "global",
         weight: 1.0
       })),
-      species_name: speciesName?.trim() || null,
       green_overlay_b64: greenMask,
       size: "1024x1024",
       stage3_use_soft_mask: false
@@ -156,21 +153,6 @@ export default function App() {
       />
       <p>{plants.length} uploaded</p>
 
-      <div style={{ marginTop: 8 }}>
-        <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>
-          Plant / species name (optional)
-        </label>
-        <input
-          value={speciesName}
-          onChange={(e) => setSpeciesName(e.target.value)}
-          placeholder="e.g., Archontophoenix alexandrae (Alexander palm)"
-          style={{ width: "80%", padding: "8px 10px", borderRadius: 6, border: "1px solid #444", background: "#111", color: "#fff" }}
-        />
-        <div style={{ fontSize: 12, color: "#888", marginTop: 6 }}>
-          This is sent to the prompt model with high priority to enforce species anatomy & colour.
-        </div>
-      </div>
-
       <h2>4. Green Mask (optional)</h2>
       <input
         type="file"
@@ -178,6 +160,23 @@ export default function App() {
         onChange={(e) => handleUpload(e, setGreenMask, false)}
       />
       {greenMask && <p>✔ Green mask uploaded</p>}
+
+      <h2>Preview</h2>
+      <button
+  onClick={previewMask}
+  disabled={previewLoading}
+  style={{
+    marginTop: "8px",
+    padding: "0.5rem 1rem",
+    background: "#444",
+    color: "white",
+    border: "none",
+    borderRadius: 6,
+    cursor: "pointer"
+  }}
+>
+  {previewLoading ? "Previewing…" : "Preview Mask"}
+</button>
 
       <h2>5. Prompts (context + direction)</h2>
       {prompts.map((p, idx) => (
@@ -221,39 +220,31 @@ export default function App() {
         </div>
       )}
 
-      {/* {previewUrl && (
-        <div style={{ marginTop: "2rem" }}>
-          <h2>Final Output</h2>
-          <img
-            src={previewUrl}
-            alt="result"
-            style={{ maxWidth: "100%", border: "1px solid #ccc", borderRadius: 8 }}
-          />
-          <div style={{ marginTop: 12 }}>
-            <button
-              onClick={() => setShowEditor(true)}
-              style={{
-                padding: "0.6rem 1rem",
-                background: "#0f766e",
-                color: "white",
-                border: "none",
-                borderRadius: 6,
-                cursor: "pointer"
-              }}
-            >
-              ✏️ Edit this result
-            </button>
-          </div>
-        </div>
-      )} */}
+    {maskPreviewUrl && (
+      <div style={{ marginTop: "2rem" }}>
+        <h2>Mask Preview (red = editable)</h2>
+        <img
+          src={maskPreviewUrl}
+          alt="mask preview"
+          style={{ maxWidth: "100%", border: "1px solid #ccc" }}
+        />
 
-      {showEditor && (
-        <div style={{ marginTop: "2rem" }}>
-          <h2>Mask & Regenerate Editor</h2>
-          {/* Pass the server URL (or data URL) of your generated image */}
-          <LassoDemo externalSrc={previewUrl} />
+        <div style={{ display: "flex", gap: 16, marginTop: 12 }}>
+          {hardMaskUrl && (
+            <div>
+              <div>Hard Mask</div>
+              <img src={hardMaskUrl} alt="hard mask" style={{ width: 180, border: "1px solid #ccc" }}/>
+            </div>
+          )}
+          {softMaskUrl && (
+            <div>
+              <div>Soft Mask</div>
+              <img src={softMaskUrl} alt="soft mask" style={{ width: 180, border: "1px solid #ccc" }}/>
+            </div>
+          )}
         </div>
-      )}
+      </div>
+    )}
     </div>
   );
 }
