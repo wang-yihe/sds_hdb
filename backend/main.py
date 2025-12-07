@@ -1,9 +1,10 @@
 # backend/main.py
-import base64
+import io,base64
 import uuid
 import os, errno
 from pathlib import Path
 from typing import List, Optional
+from PIL import Image
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,6 +29,8 @@ from multi_stage_pipeline import (
     run_stage2_refine,
     run_stage3_blend,
 )
+
+from openai_client import gpt_image_edit
 
 # -----------------------------------------------------------------------------
 # App + paths
@@ -125,6 +128,11 @@ class DragPlaceBody(BaseModel):
     radius_px: int = 80
     size: str = "1024x1024"
 
+class EditLassoReq(BaseModel):
+    image_b64: str           # base64 PNG/JPG (no data URL)
+    mask_b64: str            # base64 PNG with WHITE=editable
+    prompt: str
+    size: str = "1024x1024"  # "natural" or "1024x1024"
 
 # -----------------------------------------------------------------------------
 # Helpers
@@ -361,3 +369,51 @@ def api_preview_mask(body: PreviewMaskBody):
         return {"ok": True, "previewB64": out_b64, "hardMaskB64": hard_b64, "softMaskB64": soft_b64}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+@app.post("/api/edit_lasso")
+def edit_lasso(req: EditLassoReq):
+    # gpt_image_edit already converts WHITE=editable → transparent alpha internally
+    size = None if (req.size in (None, "", "natural")) else req.size
+
+    strict = (
+        "Edit ONLY inside the transparent region of the mask. "
+        "Outside the mask, do not change even a single pixel. "
+        "Render a complete, natural form that fits within the masked area; "
+        "do not shrink unnaturally just to fit. "
+        "Match the photo’s lighting, perspective, and color temperature. "
+        "No new furniture or structures. Blend edges cleanly without halos."
+    )
+
+    out_b64 = gpt_image_edit(
+        image_b64=req.image_b64,
+        prompt=strict + (req.prompt or ""),
+        mask_b64=req.mask_b64,
+        size=size or "1024x1024",   # pick "natural" if you added that to your helper
+        model="gpt-image-1"
+    )
+
+    base   = Image.open(io.BytesIO(base64.b64decode(req.image_b64))).convert("RGB")
+    edited = Image.open(io.BytesIO(base64.b64decode(out_b64))).convert("RGB")
+    maskL  = Image.open(io.BytesIO(base64.b64decode(req.mask_b64))).convert("L")
+
+    if edited.size != base.size:
+        edited = edited.resize(base.size, Image.LANCZOS)
+    if maskL.size != base.size:
+        maskL = maskL.resize(base.size, Image.NEAREST)
+
+    # binarize for safety (255 = editable)
+    maskL = maskL.point(lambda v: 255 if v >= 128 else 0)
+
+    clamped = Image.composite(edited, base, maskL)
+
+    # save result
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    name = f"lasso_edit_{uuid.uuid4().hex}.png"
+    out_path = OUT_DIR / name
+    out_path.write_bytes(base64.b64decode(out_b64))
+
+    
+
+    # IMPORTANT: return a URL that maps to /api/file/{name}
+    return {"ok": True, "resultPath": f"/api/file/{name}"}

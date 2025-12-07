@@ -1,4 +1,5 @@
 import { useState } from "react";
+import LassoDemo from "./components/ui/LassoDemo";
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -210,7 +211,7 @@ export default function App() {
         {loading ? "Generating…" : "Generate Design"}
       </button>
 
-      {previewUrl && (
+      {/* {previewUrl && (
         <div style={{ marginTop: "2rem" }}>
           <h2>Final Output</h2>
           <img
@@ -219,9 +220,9 @@ export default function App() {
             style={{ maxWidth: "100%", border: "1px solid #ccc" }}
           />
         </div>
-      )}
+      )} */}
 
-      {/* {previewUrl && (
+      {previewUrl && (
         <div style={{ marginTop: "2rem" }}>
           <h2>Final Output</h2>
           <img
@@ -245,13 +246,13 @@ export default function App() {
             </button>
           </div>
         </div>
-      )} */}
+      )}
 
       {showEditor && (
         <div style={{ marginTop: "2rem" }}>
           <h2>Mask & Regenerate Editor</h2>
           {/* Pass the server URL (or data URL) of your generated image */}
-          <LassoDemo externalSrc={previewUrl} />
+          <LassoDemo externalSrc={previewUrl}/>
         </div>
       )}
     </div>
