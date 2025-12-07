@@ -4,6 +4,17 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """Application settings for SDS HDB App."""
+    # RAG Configuration
+    google_api_key: str = ""  # For Gemini LLM
+    rag_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    rag_chat_model: str = "gemini-2.5-flash"
+    rag_db_path: str = "storage/chroma_db"
+    rag_data_path: str = "data/full_dataset.xlsx"
+    rag_max_results: int = 10
+    rag_retrieval_k: int = 5  # Number of documents to retrieve
+    rag_fetch_k: int = 10  # MMR fetch_k parameter
+    rag_lambda_mult: float = 0.5  # MMR diversity parameter
+    
     # Storage Configuration
     canvas_asset_dir: str = "storage/canvas_assets"
     # Server Configuration

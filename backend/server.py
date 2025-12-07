@@ -4,10 +4,15 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+import logging
 
+from backend.services.RAG_service import init_chroma, DB_PATH
 from core.config import get_settings
 from db.db import connect_to_db, close_db_connection
 from routes.main_router import main_router 
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 env = get_settings().environment
 PORT = get_settings().app_port
@@ -15,9 +20,22 @@ CANVAS_ASSET_DIR = get_settings().canvas_asset_dir
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    "Lifespan for the app"
+    """Lifespan for the app"""
+    # Connect to MongoDB
     await connect_to_db()
+    
+    # Initialize ChromaDB for RAG - ADD THIS BLOCK
+    try:
+        logger.info("Initializing ChromaDB...")
+        init_chroma()
+        logger.info("ChromaDB initialization complete")
+    except Exception as e:
+        logger.error(f"Failed to initialize ChromaDB: {e}")
+        # Don't fail startup - endpoints will handle missing DB
+    
     yield
+    
+    # Cleanup
     await close_db_connection()
     
 app = FastAPI(lifespan=lifespan, redirect_slashes=False)
