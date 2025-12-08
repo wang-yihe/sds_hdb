@@ -6,9 +6,11 @@ import numpy as np
 import cv2
 import io
 import google.generativeai as genai
-from vertexai.preview.vision_models import ImageGenerationModel 
-from vertexai.preview.vision_models import MaskReferenceImage
-from vertexai.preview.vision_models import RawReferenceImage
+from vertexai.preview.vision_models import ImageGenerationModel
+# Ensure you have this import:
+from vertexai.preview.vision_models import RawReferenceImage, MaskReferenceImage
+from google.cloud import storage
+import uuid
 import vertexai
 import re
 
@@ -19,17 +21,21 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
 
 _DATAURL_RE = re.compile(r"^data:(?P<mime>[^;]+);base64,(?P<b64>.+)$", re.IGNORECASE)
 
-KEY_PATH = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+credentials_path = os.getenv("CREDENTIALS")
 
 PROJECT_ID = "geminiproject-06767" 
 LOCATION = "asia-southeast1"
+MODEL = "imagen-3.0-edit-002"
+BUCKET = "projectsds"
+
 
 try:
+    credentials = service_account.Credentials.from_service_account_file(credentials_path)
     vertexai.init(
         project=PROJECT_ID, 
         location=LOCATION,
         # Note: If GOOGLE_APPLICATION_CREDENTIALS is set, you don't need to pass credentials=
-        credentials="/Users/zzziyah/Desktop/School/Term 7/Spatial Design Studio/vertex/geminiproject-06767-1843e4fd2c21.json"
+        credentials=credentials
     )
     print(f"Vertex AI SDK initialized successfully for project: {PROJECT_ID}")
 except Exception as e:
@@ -114,14 +120,84 @@ def _dataurl_to_part(url: str) -> dict:
     return {"mime_type": mime, "data": raw}
 
 def _b64_to_image_bytes(b64_string: str) -> bytes:
-    """Decodes a base64 string into raw image bytes."""
-    img_bytes = base64.b64decode(b64_string)
-    img_pil = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+    # 🛑 Add a check for the size and type of the input string
+    if not isinstance(b64_string, str) or len(b64_string) < 100:
+        print(f"DEBUG: Input Base64 is suspiciously short or not a string. Length: {len(b64_string) if isinstance(b64_string, str) else 'N/A'}")
+        print(f"DEBUG: Suspicious Input START: {b64_string[:50]}...")
+        raise ValueError("Invalid Base64 input received for image conversion.")
+
+    try:
+        # This is where the error happens. Wrap it in a check.
+        img_bytes = base64.b64decode(b64_string)
+        
+        # Check if the decoded data is zero or very small (indicates decoding failed or empty data)
+        if len(img_bytes) < 100:
+            raise ValueError(f"Decoded image bytes are too small ({len(img_bytes)} bytes). Input Base64 may be corrupt.")
+            
+        img_pil = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        # ... rest of function
+    except (binascii.Error, ValueError) as e:
+        # Catch decoding errors and re-raise with context
+        raise ValueError(f"Failed to decode or open image from Base64 string. Error: {e}")
     
-    # Convert PIL Image back to bytes (e.g., JPEG for efficiency)
-    img_buf = io.BytesIO()
-    img_pil.save(img_buf, format="JPEG")
-    return img_buf.getvalue()
+def upload_bytes_to_gcs(
+    data_bytes: bytes, 
+    bucket_name: str, 
+    prefix: str = "temp/imagen_uploads"
+) -> str:
+    """
+    Uploads data bytes to a GCS bucket with a unique name and returns the gs:// URI.
+    
+    Args:
+        data_bytes: Raw image data (bytes).
+        bucket_name: The name of your GCS bucket (e.g., 'my-vertex-ai-bucket').
+        prefix: Optional folder/prefix within the bucket.
+        
+    Returns:
+        The URI of the uploaded object (e.g., 'gs://bucket_name/temp/file.png').
+    """
+    
+    # 1. Initialize Client
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    
+    # 2. Create a unique blob name to avoid conflicts
+    file_name = f"{prefix}/{uuid.uuid4()}.png"
+    blob = bucket.blob(file_name)
+    
+    # 3. Upload the data
+    # Use content_type='image/png' since your _b64_to_image_bytes should output PNG format.
+    blob.upload_from_string(data_bytes, content_type='image/png')
+    
+    # 4. Return the URI required by Vertex AI
+    return f"gs://{bucket_name}/{file_name}"
+
+def delete_gcs_file(gcs_uri: str):
+    """
+    Deletes the GCS object corresponding to the given gs:// URI.
+    
+    Args:
+        gcs_uri: The full URI of the object (e.g., 'gs://bucket_name/path/file.png').
+    """
+    if not gcs_uri.startswith("gs://"):
+        print(f"Warning: Not a GCS URI: {gcs_uri}")
+        return
+
+    try:
+        # 1. Parse bucket and blob name from the URI
+        path = gcs_uri[5:] # Remove "gs://" prefix
+        bucket_name, blob_name = path.split("/", 1)
+        
+        # 2. Delete the blob
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(blob_name)
+        blob.delete()
+        print(f"Successfully deleted GCS file: {gcs_uri}")
+        
+    except Exception as e:
+        print(f"Error deleting GCS file {gcs_uri}: {e}")
+
 # ---------------------------
 # GPT-4o Vision (reads images → text)
 # ---------------------------
@@ -289,7 +365,7 @@ def vertex_ai_image_edit_mask(
     image_b64: str,
     prompt: str,
     mask_b64: str,
-    model: str = "imagen-3.0-edit-002", # Use an editing-focused model
+    model: str = "imagen-3.0-generate-002",
 ) -> str:
     """
     Calls the Vertex AI Imagen Image Editing API with a user-provided mask.
@@ -304,9 +380,14 @@ def vertex_ai_image_edit_mask(
     base_image_bytes = _b64_to_image_bytes(image_b64)
     mask_image_bytes = _b64_to_image_bytes(mask_b64)
 
-    # Wrap the raw image bytes in the required SDK objects
-    source_image = RawReferenceImage(image_bytes=base_image_bytes)
-    mask_image = MaskReferenceImage(image_bytes=mask_image_bytes)
+    # 1. Upload the files
+    base_uri = upload_bytes_to_gcs(base_image_bytes, BUCKET)
+    mask_uri = upload_bytes_to_gcs(mask_image_bytes, BUCKET)
+
+    # 3. Create Reference Objects using the uploaded file objects
+    # These objects now contain the GCS URI, which the model requires.
+    source_image = RawReferenceImage(gcs_uri=base_uri)
+    mask_image = MaskReferenceImage(gcs_uri=mask_uri)
     
     print("Calling Vertex AI Imagen for localized editing...")
     
@@ -317,8 +398,7 @@ def vertex_ai_image_edit_mask(
             mask=mask_image,
             number_of_images=1,
             # Use 'inpainting' for replacing content in the masked area
-            edit_mode="inpainting", 
-            timeout=300.0
+            edit_mode="inpainting"
         )
 
         if response.generated_images:
@@ -332,3 +412,8 @@ def vertex_ai_image_edit_mask(
     except Exception as e:
         print(f"An error occurred during localized editing: {e}")
         return None
+    finally:
+        # Ensures files are deleted whether the try block succeeds or fails
+        delete_gcs_file(base_uri)
+        delete_gcs_file(mask_uri)
+    

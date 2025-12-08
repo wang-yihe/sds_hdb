@@ -213,7 +213,7 @@ def run_stage1_layout(
     species_block: str,
     user_prompts: Optional[List[dict]] = None,
     green_overlay_b64: Optional[str] = None,
-    size: str = "512x512",
+    size: str = "1024x1024",
 ) -> Tuple[str, str, str]:
     """
     Stage 1: layout + style + canopy freedom.
@@ -244,7 +244,20 @@ def run_stage1_layout(
         mask_b64 = hard_b64  # canopy freedom
 
     print ("here 3")
-    mask_b64 = _ensure_same_size_mask(mask_b64, base_image_b64)
+    if green_overlay_b64 and mask_b64 is None:
+        print("WARNING: Mask generation failed, proceeding without mask.")
+        mask_b64 = "" # Use an empty string or handle appropriately
+
+    # Check the base image
+    if not base_image_b64:
+        raise ValueError("Base image Base64 string is empty or None.")
+    
+    # Check the mask before calling the ensuring function
+    if mask_b64 is not None:
+        mask_b64 = _ensure_same_size_mask(mask_b64, base_image_b64)
+    else:
+        # Set mask_b64 to a valid empty string or ensure your editing function handles None correctly
+        mask_b64 = ""
 
     print ("here 4")
     # Call image edit
