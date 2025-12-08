@@ -12,3 +12,6 @@ wheels/
 # Env file
 .env
 
+outputs/
+
+.DS_Store
