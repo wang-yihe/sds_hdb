@@ -11,12 +11,29 @@ from google.genai import types
 
 # === CONFIG ===
 BASE_DIR = Path(__file__).resolve().parent  # backend/
-IMAGE_PATH = BASE_DIR / "outputs" / "pic_to_vid" / "generated output 1.jpg"
+IMAGE_PATH = BASE_DIR / "outputs" / "pic_to_vid" / "generated output 2.jpg"
 OUTPUT_DIR = BASE_DIR / "outputs" / "pic_to_vid"
 
 PROMPT = (
-    "Create a 5-10 second smooth camera move of this landscape. "
-    "Preserve layout, perspective. No extra objects."
+    "Use the input image as a strict, fixed environment."
+    "Do NOT expand the scene beyond what is visible in the image."
+    "Do NOT reveal new paths, buildings, sky, vegetation, terrain, or background that is not present in the original pixels."
+
+    "Camera starts 3m above ground level and 10m from the scene, facing directly toward the landscape with no tilt or roll."
+    "Use a 35mm lens for natural perspective. Subject centered, horizon placed on the lower third."
+
+    "All camera movement must remain INSIDE the boundaries of the original image."
+    "Instead of moving into unseen areas, perform only a subtle parallax effect:"
+    "- slight left-to-right motion"
+    "- slight push-in (maximum 5%)"
+    "These motions should NOT expose anything beyond the original frame."
+
+    "Lighting: bright neutral daylight with soft shadows (slightly overcast)."
+    "Preserve plant and material colors exactly."
+
+    "Preserve ALL hardscape geometry, scale, perspective, and layout exactly as shown."
+    "Do NOT add, remove, or alter ANY objects."
+    "Render the sequence as a 5-10 second smooth camera motion, strictly constrained to the content visible in the input image."
 )
 
 MODEL_NAME = "models/veo-3.1-generate-preview"  # you have access to this model
