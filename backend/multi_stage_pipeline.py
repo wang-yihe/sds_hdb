@@ -35,6 +35,7 @@ from rembg import remove as rembg_remove
 from PIL import Image
 
 from openai_client import gpt_image_edit
+from gemini_client import vertex_ai_image_edit_mask
 from prompt_builders import (
     build_style_and_species_blocks,
     render_user_prompts,
@@ -212,7 +213,7 @@ def run_stage1_layout(
     species_block: str,
     user_prompts: Optional[List[dict]] = None,
     green_overlay_b64: Optional[str] = None,
-    size: str = "1024x1024",
+    size: str = "512x512",
 ) -> Tuple[str, str, str]:
     """
     Stage 1: layout + style + canopy freedom.
@@ -223,9 +224,11 @@ def run_stage1_layout(
     # Build user block
     user_block = render_user_prompts(user_prompts or [])
 
+    print ("here 1")
     # Build prompt
     prompt = compose_stage1_prompt(style_block, species_block, user_block)
 
+    print ("here 2")
     # Mask logic
     mask_b64 = None
     if green_overlay_b64:
@@ -240,20 +243,22 @@ def run_stage1_layout(
         )
         mask_b64 = hard_b64  # canopy freedom
 
+    print ("here 3")
     mask_b64 = _ensure_same_size_mask(mask_b64, base_image_b64)
 
+    print ("here 4")
     # Call image edit
-    out_b64 = gpt_image_edit(
+    out_b64 = vertex_ai_image_edit_mask(
         image_b64=base_image_b64,
         prompt=prompt,
-        mask_b64=mask_b64,
-        size=size,
-        edit_opaque_area = False
+        mask_b64=mask_b64
     )
 
+    print ("here 5")
 
     out_path = _save_b64_png(out_b64, "stage1")
 
+    print ("here 6")
     return out_path, prompt, (mask_b64 or "")
 
 
@@ -353,7 +358,7 @@ def generate_all_smart(
     user_prompts: Optional[List[dict]] = None,
     species_name: Optional[str] = None,
     green_overlay_b64: Optional[str] = None,
-    size: str = "1024x1024",
+    size: str = "512x512",
     stage3_use_soft_mask: bool = False,
 ) -> dict:
     """
@@ -382,6 +387,8 @@ def generate_all_smart(
         species_hint=species_name,
     )
 
+    print("here")
+
     # 2) Stage 1
     s1_path, s1_prompt, s1_mask = run_stage1_layout(
         base_image_b64=base_image_b64,
@@ -391,6 +398,9 @@ def generate_all_smart(
         green_overlay_b64=green_overlay_b64,
         size=size,
     )
+
+    print ("after")
+
     s1_b64 = _open_as_base64(s1_path)  # read back as base64 for next stage input
 
     # 3) Stage 2

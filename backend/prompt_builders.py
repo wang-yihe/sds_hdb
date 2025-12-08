@@ -10,9 +10,11 @@ This module:
   Stage 2: Species-accurate refinement (masked, typically near trunks/bases)
   Stage 3: Global blend / color harmony (very light touch)
 """
-
+import re
 from typing import List, Tuple, Dict, Optional
-from openai_client import gpt_vision_summarize, b64_to_data_url
+from openai_client import b64_to_data_url
+from gemini_client import gpt_vision_summarize
+
 
 
 # =========================
@@ -68,22 +70,71 @@ def _inject_species_hint(species_block: str, hint: Optional[str]) -> str:
     lines[insert_idx:insert_idx] = hint_block
     return "\n".join(lines)
 
+def _extract_blocks(raw: str) -> Tuple[str, str]:
+    """
+    Robustly extract [STYLE] and [PLANT_SPECIES] blocks, even if Gemini adds spacing.
+    """
+    # Normalize line endings and case for searching (but keep original text for slicing)
+    raw_norm = raw.replace("\r\n", "\n")
+    # Use regex so small deviations don't break parsing
+    m_style = re.search(r"(?is)\[STYLE\](.*?)(?=\n\s*\[PLANT_SPECIES\]|\Z)", raw_norm)
+    m_species = re.search(r"(?is)\[PLANT_SPECIES\](.*)$", raw_norm)
+
+    style_block = "[STYLE]\n" + (m_style.group(1).strip() if m_style else raw_norm.strip())
+    species_block = "[PLANT_SPECIES]\n" + (m_species.group(1).strip() if m_species else "")
+
+    return style_block.strip(), species_block.strip()
+
+def _inject_species_hint(species_block: str, species_hint: Optional[str]) -> str:
+    """If the user gave a species hint, append it as a strong preference note."""
+    if not species_hint:
+        return species_block
+    note = (
+        "\n\n- Strong user hint: Prefer this species if plausible for the references and site: "
+        f"**{species_hint.strip()}**."
+    )
+    if "[PLANT_SPECIES]" in species_block:
+        return species_block + note
+    # If weird formatting, still add the hint.
+    return (species_block or "[PLANT_SPECIES]\n").rstrip() + note
+
+def _extract_blocks(raw: str) -> Tuple[str, str]:
+    """
+    Robustly extract [STYLE] and [PLANT_SPECIES] blocks, even if Gemini adds spacing.
+    """
+    # Normalize line endings and case for searching (but keep original text for slicing)
+    raw_norm = raw.replace("\r\n", "\n")
+    # Use regex so small deviations don't break parsing
+    m_style = re.search(r"(?is)\[STYLE\](.*?)(?=\n\s*\[PLANT_SPECIES\]|\Z)", raw_norm)
+    m_species = re.search(r"(?is)\[PLANT_SPECIES\](.*)$", raw_norm)
+
+    style_block = "[STYLE]\n" + (m_style.group(1).strip() if m_style else raw_norm.strip())
+    species_block = "[PLANT_SPECIES]\n" + (m_species.group(1).strip() if m_species else "")
+
+    return style_block.strip(), species_block.strip()
+
 def build_style_and_species_blocks(
     base_image_b64: str,
     style_refs_b64: List[str],
     plant_refs_b64: List[str],
     species_hint: Optional[str] = None,
-    vision_model: str = "gpt-5.1",
+    vision_model: str = "gemini-2.5-flash-image",
     max_tokens: int = 650
 ) -> Tuple[str, str]:
     """
-    Calls GPT-4o-mini (vision) to read the provided images and return two labeled blocks:
+    Uses a vision model (Gemini 1.5) to read the provided images and return two labeled blocks:
     [STYLE] and [PLANT_SPECIES].
+
+    Input semantics:
+    - base_image_b64: perspective image (context for lighting/scale/scene)
+    - style_refs_b64: multiple references of the target design language / vibe
+    - plant_refs_b64: multiple references of the same species (angles, morphology)
+    - species_hint: optional strong preference the user wants if plausible
     """
 
     content: List[Dict] = []
 
-    # Perspective (context; not analyzed line-by-line, but helps judge lighting/feel)
+    # Perspective first (gives lighting/scale)
     content += [
         {"type": "text", "text": "PERSPECTIVE (context for scale/lighting):"},
         {"type": "image_url", "image_url": {"url": b64_to_data_url(base_image_b64)}},
@@ -92,7 +143,7 @@ def build_style_and_species_blocks(
     if species_hint:
         content.append({
             "type": "text",
-            "text": f"TARGET SPECIES (strong hint, mandatory if plausible): {species_hint}"
+            "text": f"TARGET SPECIES (strong hint; honor if plausible): {species_hint}"
         })
 
     if style_refs_b64:
@@ -105,32 +156,18 @@ def build_style_and_species_blocks(
         for b in plant_refs_b64:
             content.append({"type": "image_url", "image_url": {"url": b64_to_data_url(b)}})
 
+    # Gemini-friendly messages (your gpt_vision_summarize flattens them)
     messages = [
         {"role": "system", "content": _STYLE_SYS_MSG},
-        {"role": "user", "content": content},
+        {"role": "user",   "content": content},
     ]
 
-    raw = gpt_vision_summarize(messages, model=vision_model, max_tokens=max_tokens)
-    # Expect raw to contain [STYLE] ... [PLANT_SPECIES] ...
-    low = raw.lower()
-    i_style = low.find("[style]")
-    i_species = low.find("[plant_species]")
+    raw = gpt_vision_summarize(messages, model=vision_model, max_tokens=max_tokens) or ""
 
-    style_block = ""
-    species_block = ""
+    # Extract blocks robustly
+    style_block, species_block = _extract_blocks(raw)
 
-    if i_style != -1 and i_species != -1:
-        if i_style < i_species:
-            style_block = raw[i_style:i_species].strip()
-            species_block = raw[i_species:].strip()
-        else:
-            species_block = raw[i_species:i_style].strip()
-            style_block = raw[i_style:].strip()
-    else:
-        # Fallback: if formatting differs, return whole as style, empty species.
-        style_block = raw.strip()
-        species_block = ""
-
+    # Respect user's species hint if provided
     species_block = _inject_species_hint(species_block, species_hint)
 
     return style_block, species_block
