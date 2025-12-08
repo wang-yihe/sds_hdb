@@ -48,7 +48,7 @@ function SaveButton({ projectId }) {
       onClick={handleSave} 
       disabled={isSaving} 
       size="sm"
-      className="absolute top-4 right-4 z-[999]"
+      className="absolute top-4 right-40 z-[999]"
     >
       {isSaving ? "Saving..." : "Save"}
     </Button>

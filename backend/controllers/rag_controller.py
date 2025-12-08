@@ -2,8 +2,9 @@ from typing import Optional, Dict, Any
 import logging
 from fastapi import HTTPException
 
-from services.RAG_service import (
+from services.rag_service import (
     search_plants as service_search_plants,
+    search_plants_with_images as service_search_plants_with_images,
     get_plant_details as service_get_plant_details,
     rebuild_database as service_rebuild_database,
     init_chroma,
@@ -26,6 +27,19 @@ class RAGController:
     
     @staticmethod
     async def search_plants(query: str, max_results: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Search for plants using natural language query.
+        
+        Args:
+            query: Natural language search query
+            max_results: Maximum number of results (uses config default if None)
+            
+        Returns:
+            Dictionary with query, plants list, and count
+            
+        Raises:
+            HTTPException: If search fails
+        """
         try:
             logger.info(f"Processing plant search: '{query}' (max_results={max_results})")
             
@@ -57,6 +71,54 @@ class RAGController:
             raise HTTPException(
                 status_code=500,
                 detail=f"Plant search failed: {str(e)}"
+            )
+    
+    @staticmethod
+    async def search_plants_with_images(query: str, max_results: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Search for plants and return botanical name + image for each.
+        
+        Args:
+            query: Natural language search query
+            max_results: Maximum number of results (uses config default if None)
+            
+        Returns:
+            Dictionary with query, plants (with images), and count
+            
+        Raises:
+            HTTPException: If search fails
+        """
+        try:
+            logger.info(f"Processing plant search with images: '{query}' (max_results={max_results})")
+            
+            # Validate query
+            if not query or not query.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail="Query cannot be empty"
+                )
+            
+            # Use service to search with images
+            plants = service_search_plants_with_images(
+                query=query.strip(),
+                max_results=max_results
+            )
+            
+            logger.info(f"Search returned {len(plants)} results with images")
+            
+            return {
+                "query": query,
+                "plants": plants,  # List of {botanical_name, image}
+                "count": len(plants)
+            }
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Plant search with images failed: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Plant search with images failed: {str(e)}"
             )
     
     @staticmethod
@@ -314,9 +376,5 @@ class RAGController:
             "service": "RAG Plant Search",
             "version": settings.api_version
         }
-
-
-# =============================================================================
-# CONVENIENCE INSTANCE
-# =============================================================================
+        
 rag_controller = RAGController()

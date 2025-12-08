@@ -7,8 +7,10 @@ import userReducer from "@/store/slices/userSlice";
 import authReducer from "@/store/slices/authSlice";
 import projectReducer from "@/store/slices/projectSlice";
 import aiReducer from "@/store/slices/aiSlice";
+import ragReducer from "@/store/slices/ragSlice";
 
 const rootReducer = combineReducers({
+    rag: ragReducer,
     ai: aiReducer,
     canvas: canvasReducer,
     globalLoader: globalLoaderReducer,

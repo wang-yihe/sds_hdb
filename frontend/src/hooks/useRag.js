@@ -9,7 +9,7 @@ import {
     clearPlantDetails 
 } from "@/store/slices/ragSlice";
 
-const useRag = () => {
+export const useRag = () => {
     const dispatch = useDispatch();
     const { searchResults, searchQuery, plantDetails, exampleQueries, loadingFlags } = useSelector((state) => state.rag);
     const {
@@ -104,5 +104,3 @@ const useRag = () => {
         getPlantByName
     };
 };
-
-export default useRag;

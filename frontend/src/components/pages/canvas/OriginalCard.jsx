@@ -15,7 +15,12 @@ export class OriginalCardShapeUtil extends ShapeUtil {
     h: T.number,
     styleImages: T.arrayOf(T.string),
     perspectiveImages: T.arrayOf(T.string),
-    plants: T.arrayOf(T.string),
+    plants: T.arrayOf(
+      T.object({
+        botanical_name: T.string,
+        image: T.string.nullable() // base64 string or null
+      })
+    ),
     prompt: T.string,
   }
 

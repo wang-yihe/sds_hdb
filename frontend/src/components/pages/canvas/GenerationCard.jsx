@@ -11,6 +11,7 @@ import { createPortal } from 'react-dom'
 import { GENERATION_CARD_CONFIG } from '../../../config/generationcardconfig'
 import { createVideoCardAsShapes } from './VideoCard'
 import { useGenerateAllSmart } from '@/hooks/useAi'
+import { useRag } from '@/hooks/useRag'
 
 // Shape Util class for Generation Card
 export class GenerationCardShapeUtil extends ShapeUtil {
@@ -63,6 +64,7 @@ export class GenerationCardShapeUtil extends ShapeUtil {
     
     const editor = useEditor()
     const { generate } = useGenerateAllSmart()
+    const { handleSearchPlantsWithImages, searchResults, loadingFlags } = useRag()
     
     const [showComments, setShowComments] = useState(false)
     const [editMode, setEditMode] = useState(false)
@@ -73,8 +75,8 @@ export class GenerationCardShapeUtil extends ShapeUtil {
     const [commentText, setCommentText] = useState('')
     const [isImageEnlarged, setIsImageEnlarged] = useState(false)
     const [selectedPlants, setSelectedPlants] = useState([])
-    
-    // Add this new state for the Blob URL
+    const [searchQuery, setSearchQuery] = useState('')
+    const [plantSearchResults, setPlantSearchResults] = useState([])    
     const [displayImageUrl, setDisplayImageUrl] = useState(null)
     
     const canvasRef = useRef(null)
@@ -142,11 +144,33 @@ export class GenerationCardShapeUtil extends ShapeUtil {
             handleAIGeneration()
         }
     }, []) // Only run once on mount (or twice in Strict Mode, but the ref stops the second dispatch)
+    
+    const handlePlantSearch = async () => {
+      if (!searchQuery.trim()) return
+      
+      try {
+        await handleSearchPlantsWithImages({ 
+          query: searchQuery, 
+          max_results: 5 
+        })
+        // Update local state with search results
+        setPlantSearchResults(searchResults)
+      } catch (error) {
+        console.error('Plant search failed:', error)
+        editor.updateShapes([{
+          id: shape.id,
+          type: 'generationCard',
+          props: { 
+            ...shape.props, 
+            error: 'Plant search failed: ' + error.message
+          }
+        }])
+      }
+    }
 
     const handleAIGeneration = async () => {
       const { originalData } = shape.props
 
-      // Set generating state
       editor.updateShapes([{
         id: shape.id,
         type: 'generationCard',
@@ -158,25 +182,21 @@ export class GenerationCardShapeUtil extends ShapeUtil {
       }])
 
       try {
-        // Prepare generation form
         const generationForm = {
           styleImages: originalData.styleImages || [],
           perspectiveImages: originalData.perspectiveImages || [],
-          selectedPlants: originalData.selectedPlants || originalData.plants || [],
+          selectedPlants: selectedPlants,
           prompt: originalData.prompt || '',
-          // Include regeneration data if this is a regeneration
           lassoSelection: originalData.lassoSelection || null,
           regenerationPrompt: originalData.regenerationPrompt || null,
         }
 
         console.log('Generating with:', generationForm)
 
-        // Call AI generation API
         const result = await generate(generationForm).unwrap()
 
         console.log('Generation result:', result)
 
-        // Update shape with generated image
         editor.updateShapes([{
           id: shape.id,
           type: 'generationCard',
@@ -186,12 +206,11 @@ export class GenerationCardShapeUtil extends ShapeUtil {
             isGenerating: false,
             error: ''
           }
-        }]
-        )
+        }])
+        
       } catch (err) {
         console.error('Generation failed:', err)
         
-        // Update shape with error state
         editor.updateShapes([{
           id: shape.id,
           type: 'generationCard',
@@ -203,7 +222,6 @@ export class GenerationCardShapeUtil extends ShapeUtil {
         }])
       }
     }
-
     // Calculate dynamic height based on what's visible
     const calculateHeight = () => {
       let height = GENERATION_CARD_CONFIG.defaultSize.h // base height
@@ -861,49 +879,180 @@ export class GenerationCardShapeUtil extends ShapeUtil {
                   <div style={{ fontSize: '13px', fontWeight: '500', color: '#1f2937', marginBottom: '8px' }}>
                     🌱 Suggested Plants:
                   </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
-                    {['Monstera', 'Fern', 'Snake Plant', 'Pothos', 'Peace Lily', 'Rubber Plant', 'Fiddle Leaf Fig', 'Spider Plant'].map((plant) => (
-                      <button
-                        key={plant}
-                        onPointerDown={(e) => {
-                          e.stopPropagation()
-                          setSelectedPlants(prev => 
-                            prev.includes(plant) 
-                              ? prev.filter(p => p !== plant)
-                              : [...prev, plant]
+                  
+                  {/* Search Input */}
+                  <div style={{ marginBottom: '8px' }}>
+                    <input
+                      type="text"
+                      placeholder="e.g., tall trees for shade, butterfly plants..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          handlePlantSearch()
+                        }
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        marginBottom: '6px',
+                      }}
+                    />
+                    <button
+                      onClick={handlePlantSearch}
+                      disabled={loadingFlags.isSearching || !searchQuery.trim()}
+                      style={{
+                        padding: '6px 16px',
+                        background: loadingFlags.isSearching ? '#9ca3af' : GENERATION_CARD_CONFIG.colors.primary,
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: loadingFlags.isSearching ? 'not-allowed' : 'pointer',
+                        fontSize: '12px',
+                        fontWeight: '500',
+                        width: '100%',
+                      }}
+                    >
+                      {loadingFlags.isSearching ? '🔍 Searching & Generating Images...' : 'Search Plants'}
+                    </button>
+                  </div>
+
+                  {/* Loading State */}
+                  {loadingFlags.isSearching && (
+                    <div style={{ 
+                      padding: '16px', 
+                      textAlign: 'center', 
+                      color: '#6b7280',
+                      background: '#f9fafb',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                    }}>
+                      🌿 Searching plants and generating images...<br/>
+                      <span style={{ fontSize: '11px', color: '#9ca3af' }}>
+                        This may take 30-60 seconds
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Plant Results Grid */}
+                  {!loadingFlags.isSearching && plantSearchResults.length > 0 && (
+                    <>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+                        {plantSearchResults.map((plant) => {
+                          const isSelected = selectedPlants.some(p => p.botanical_name === plant.botanical_name)
+                          
+                          return (
+                            <button
+                              key={plant.botanical_name}
+                              onPointerDown={(e) => {
+                                e.stopPropagation()
+                                setSelectedPlants(prev => {
+                                  const exists = prev.some(p => p.botanical_name === plant.botanical_name)
+                                  if (exists) {
+                                    return prev.filter(p => p.botanical_name !== plant.botanical_name)
+                                  } else {
+                                    return [...prev, plant]
+                                  }
+                                })
+                              }}
+                              style={{
+                                padding: '8px 12px',
+                                background: isSelected 
+                                  ? GENERATION_CARD_CONFIG.colors.primary 
+                                  : 'white',
+                                color: isSelected 
+                                  ? GENERATION_CARD_CONFIG.colors.headerText 
+                                  : '#374151',
+                                border: `2px solid ${isSelected 
+                                  ? GENERATION_CARD_CONFIG.colors.primary 
+                                  : '#e5e7eb'}`,
+                                borderRadius: '10px',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: '500',
+                                transition: 'all 0.2s',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                boxShadow: isSelected ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                              }}
+                            >
+                              {plant.image && (
+                                <img 
+                                  src={`data:image/png;base64,${plant.image}`}
+                                  alt={plant.botanical_name}
+                                  style={{
+                                    width: '24px',
+                                    height: '24px',
+                                    objectFit: 'cover',
+                                    borderRadius: '4px',
+                                  }}
+                                />
+                              )}
+                              <span style={{ fontSize: '11px' }}>
+                                {plant.botanical_name}
+                              </span>
+                            </button>
                           )
+                        })}
+                      </div>
+                      
+                      <button
+                        onClick={() => {
+                          setPlantSearchResults([])
+                          setSearchQuery('')
                         }}
                         style={{
-                          padding: '6px 12px',
-                          background: selectedPlants.includes(plant) 
-                            ? GENERATION_CARD_CONFIG.colors.primary 
-                            : GENERATION_CARD_CONFIG.colors.surface,
-                          color: selectedPlants.includes(plant) 
-                            ? GENERATION_CARD_CONFIG.colors.headerText 
-                            : '#374151',
-                          border: `1px solid ${selectedPlants.includes(plant) 
-                            ? GENERATION_CARD_CONFIG.colors.primary 
-                            : GENERATION_CARD_CONFIG.colors.mutedBorder}`,
-                          borderRadius: '16px',
+                          padding: '4px 8px',
+                          background: 'transparent',
+                          color: '#6b7280',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '6px',
                           cursor: 'pointer',
-                          fontSize: '12px',
-                          fontWeight: '500',
-                          transition: 'all 0.2s',
+                          fontSize: '11px',
+                          marginBottom: '8px',
                         }}
                       >
-                        {plant}
+                        Clear Search
                       </button>
-                    ))}
-                  </div>
+                    </>
+                  )}
+
+                  {/* Selected Plants Summary */}
                   {selectedPlants.length > 0 && (
                     <div style={{
-                      padding: '6px 10px',
+                      padding: '8px 12px',
                       background: '#f0fdf4',
-                      borderRadius: '6px',
+                      borderRadius: '8px',
                       fontSize: '11px',
                       color: '#15803d',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
                     }}>
-                      ✓ {selectedPlants.length} plant{selectedPlants.length !== 1 ? 's' : ''} selected: {selectedPlants.join(', ')}
+                      <span style={{ fontWeight: '600' }}>
+                        ✓ {selectedPlants.length} plant{selectedPlants.length !== 1 ? 's' : ''} selected
+                      </span>
+                      <div style={{ 
+                        display: 'flex', 
+                        gap: '4px', 
+                        flexWrap: 'wrap',
+                        flex: 1,
+                      }}>
+                        {selectedPlants.map(p => (
+                          <span key={p.botanical_name} style={{
+                            padding: '2px 6px',
+                            background: '#dcfce7',
+                            borderRadius: '4px',
+                            fontSize: '10px',
+                          }}>
+                            {p.botanical_name}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

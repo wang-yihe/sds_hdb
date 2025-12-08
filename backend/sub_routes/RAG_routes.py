@@ -1,14 +1,17 @@
 from fastapi import APIRouter, BackgroundTasks
+from pydantic import BaseModel, Field
+from typing import Optional
 import logging
 
 from controllers.rag_controller import rag_controller
 from core.config import get_settings
-from schemas.RAG_schema import (
-    PlantSearchRequest, PlantSearchResponse,
-    PlantDetailsResponse, DatabaseStatusResponse,
-    RebuildResponse, HealthResponse
+from schemas.rag_schema import (
+    PlantSearchResponse,
+    PlantDetailsResponse,
+    DatabaseStatusResponse,
+    RebuildResponse,
+    HealthResponse
 )
-
 # Setup logging
 logger = logging.getLogger(__name__)
 
@@ -18,9 +21,28 @@ settings = get_settings()
 # Create router
 app = APIRouter()
 
+
 # =============================================================================
-# STARTUP EVENT
+# REQUEST/RESPONSE MODELS
 # =============================================================================
+class PlantSearchRequest(BaseModel):
+    query: str = Field(
+        ..., 
+        description="Natural language search query",
+        examples=[
+            "tall trees for shade",
+            "butterfly-attracting plants",
+            "groundcovers for full sun",
+            "native species with red flowers"
+        ]
+    )
+    max_results: Optional[int] = Field(
+        default=None,  # Will use settings.rag_max_results if None
+        ge=1,
+        le=50,
+        description="Maximum number of results to return"
+    )
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize ChromaDB on application startup"""
@@ -62,6 +84,32 @@ async def search_plants(request: PlantSearchRequest):
         max_results=request.max_results
     )
     return PlantSearchResponse(**result)
+
+
+@app.post("/search-with-images")
+async def search_plants_with_images(request: PlantSearchRequest):
+    """
+    Search for plants and return botanical names with generated images.
+    
+    This endpoint:
+    1. Searches for plants matching your query
+    2. For each plant, checks if an image exists or generates a new one
+    3. Returns botanical name + base64 PNG image
+    
+    **Example queries:**
+    - "tall trees for shade"
+    - "butterfly-attracting plants" 
+    - "groundcovers suitable for full sun"
+    
+    **Returns:**
+    - List of objects with botanical_name and image (base64 PNG)
+    - Limit to max 5 results recommended due to image generation cost
+    """
+    result = await rag_controller.search_plants_with_images(
+        query=request.query,
+        max_results=request.max_results or 5  # Default to 5 for image searches
+    )
+    return result
 
 
 @app.get("/plant/{botanical_name}", response_model=PlantDetailsResponse)
@@ -121,35 +169,16 @@ async def rebuild_database(background_tasks: BackgroundTasks):
 
 @app.get("/examples")
 async def get_example_queries():
-    """
-    Get example search queries to help users understand the system.
-    
-    **Returns:**
-    - List of example queries organized by category
-    """
+
     return await rag_controller.get_example_queries()
 
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
-    """
-    Simple health check endpoint for monitoring.
-    
-    **Returns:**
-    - Service status and version
-    """
     health = await rag_controller.health_check()
     return HealthResponse(**health)
 
 
 @app.post("/test")
 async def run_test_queries():
-    """
-    Run a series of test queries to verify the RAG system is working.
-    
-    **Development only** - Remove in production.
-    
-    **Returns:**
-    - Results from multiple test queries
-    """
     return await rag_controller.run_test_queries()

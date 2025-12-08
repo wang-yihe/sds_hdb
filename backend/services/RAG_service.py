@@ -1,12 +1,10 @@
-"""
-RAG Service for Plant Database
-Handles ChromaDB vector store, semantic search, and LLM-powered plant recommendations
-"""
-
 import os
+import base64
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict
 import pandas as pd
+from openai import OpenAI
+
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_core.messages import SystemMessage
@@ -18,25 +16,27 @@ from langchain_huggingface import HuggingFaceEmbeddings
 
 from core.config import get_settings
 
-# =============================================================================
-# CONFIGURATION
-# =============================================================================
 settings = get_settings()
 
 ROOT = Path(__file__).parent.parent
 DB_PATH = ROOT / settings.rag_db_path
 DATA_PATH = ROOT / settings.rag_data_path
+IMAGES_DIR = ROOT / "storage" / "generated_plants"  # Store generated plant images
 
-# Initialize models (lazy loading handled by functions)
+# Ensure images directory exists
+IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+
+# Initialize models (lazy loading)
 _chat_model = None
 _embedding_model = None
+_openai_client = None
 
 
 def get_chat_model():
-    """Lazy load chat model"""
+    """Lazy load Gemini chat model"""
     global _chat_model
     if _chat_model is None:
-        api_key = settings.google_api_key or os.environ.get("GOOGLE_API_KEY")
+        api_key = get_settings().google_api_key
         if not api_key:
             raise ValueError(
                 "GOOGLE_API_KEY not found. Set it in .env file or environment variables."
@@ -58,19 +58,24 @@ def get_embedding_model():
     return _embedding_model
 
 
+def get_openai_client():
+    """Lazy load OpenAI client for image generation"""
+    global _openai_client
+    if _openai_client is None:
+        api_key = settings.OPENAI_API_KEY or os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "OPENAI_API_KEY not found. Set it in .env file or environment variables."
+            )
+        _openai_client = OpenAI(api_key=api_key)
+    return _openai_client
+
+
 # =============================================================================
 # DOCUMENT BUILDING
 # =============================================================================
 def build_doc_from_row(row: pd.Series) -> Document:
-    """
-    Convert one Excel row into a LangChain Document for embedding.
-    
-    Expected columns in Excel:
-      Number, Botanical Name, Plant Type, Habit, Crownshaft, Trunk / Stem, 
-      Leaves, Height (m), Spread (m), Girth (m), Planting Area, Flowers, 
-      Fruits, Native, Fauna Attracting, Distinctive Features / Remarks, 
-      Appearance Summary
-    """
+    """Convert one Excel row into a LangChain Document for embedding."""
     
     def g(col_name: str) -> str:
         """Safe getter: NaN -> empty string, strip spaces"""
@@ -87,7 +92,7 @@ def build_doc_from_row(row: pd.Series) -> Document:
     height_m = g("Height (m)")
     spread_m = g("Spread (m)")
     girth_m = g("Girth (m)")
-    planting_area = g("Planting  Area")  # note: two spaces in Excel
+    planting_area = g("Planting  Area")
     flowers = g("Flowers")
     fruits = g("Fruits")
     native = g("Native")
@@ -137,15 +142,7 @@ Summary: {appearance_summary}
 # VECTOR DB INITIALIZATION
 # =============================================================================
 def init_chroma(force_rebuild: bool = False) -> bool:
-    """
-    Initialize ChromaDB from Excel file.
-    
-    Args:
-        force_rebuild: If True, rebuild even if DB exists
-        
-    Returns:
-        True if DB was built/rebuilt, False if already existed
-    """
+    """Initialize ChromaDB from Excel file."""
     # Check if DB already exists
     if not force_rebuild and DB_PATH.exists() and any(DB_PATH.iterdir()):
         print("[ChromaDB] Database already exists, skipping rebuild")
@@ -166,7 +163,7 @@ def init_chroma(force_rebuild: bool = False) -> bool:
     documents = []
     for _, row in df.iterrows():
         doc = build_doc_from_row(row)
-        if doc.page_content.strip():  # Only add non-empty documents
+        if doc.page_content.strip():
             documents.append(doc)
 
     print(f"[ChromaDB] Loaded {len(documents)} plant documents")
@@ -183,15 +180,7 @@ def init_chroma(force_rebuild: bool = False) -> bool:
 
 
 def get_retriever(k: int | None = None):
-    """
-    Get ChromaDB retriever for semantic search.
-    
-    Args:
-        k: Number of results to retrieve (defaults to settings.rag_retrieval_k)
-        
-    Returns:
-        LangChain retriever instance
-    """
+    """Get ChromaDB retriever for semantic search."""
     if k is None:
         k = settings.rag_retrieval_k
         
@@ -200,7 +189,7 @@ def get_retriever(k: int | None = None):
         embedding_function=get_embedding_model(),
     )
     return vs.as_retriever(
-        search_type="mmr",  # Maximal Marginal Relevance for diversity
+        search_type="mmr",
         search_kwargs={
             "k": k,
             "fetch_k": settings.rag_fetch_k,
@@ -229,7 +218,6 @@ def format_docs(docs) -> str:
     return "\n\n---\n\n".join(chunks)
 
 
-# System prompt for plant recommendations
 SYSTEM_MESSAGE = SystemMessage(
     content=(
         "You are a plant selection assistant. "
@@ -259,12 +247,7 @@ CHAT_TEMPLATE = ChatPromptTemplate.from_messages([
 
 
 def make_rag_chain(k: int | None = None):
-    """
-    Create RAG chain: retriever -> prompt -> LLM -> parser
-    
-    Args:
-        k: Number of documents to retrieve (defaults to settings.rag_retrieval_k)
-    """
+    """Create RAG chain: retriever -> prompt -> LLM -> parser"""
     if k is None:
         k = settings.rag_retrieval_k
         
@@ -283,28 +266,91 @@ def make_rag_chain(k: int | None = None):
 
 
 # =============================================================================
+# IMAGE GENERATION
+# =============================================================================
+def get_image_path(botanical_name: str) -> Path:
+    """Get the path where a plant image would be stored"""
+    safe_name = botanical_name.replace(" ", "_").replace("/", "-")
+    return IMAGES_DIR / f"{safe_name}.png"
+
+
+def check_existing_image(botanical_name: str) -> Optional[str]:
+    """Check if an image already exists for this plant, return base64 if found"""
+    image_path = get_image_path(botanical_name)
+    
+    if image_path.exists():
+        with open(image_path, "rb") as f:
+            img_bytes = f.read()
+            return base64.b64encode(img_bytes).decode('utf-8')
+    
+    return None
+
+
+def build_image_prompt(botanical_name: str) -> str:
+    """Build prompt for OpenAI image generation"""
+    return (
+        f"Generate a realistic, botanically accurate image of the species '{botanical_name}'. "
+        f"Show a full-grown mature tree with full canopy, trunk, branching structure, "
+        f"correct leaf arrangement, bark details, and accurate proportions. "
+        f"Isolate the tree on a completely transparent background suitable for a PNG file. "
+        f"No shadows, no floor, no gradients, no sky, no textures around the tree. "
+        f"Produce a clean silhouette with no artifacts."
+    )
+
+
+def generate_plant_image(botanical_name: str, size: int = 1024) -> str:
+    """
+    Generate a plant image using OpenAI, or return existing one.
+    Returns base64 encoded PNG image.
+    """
+    # Check if image already exists
+    existing_image = check_existing_image(botanical_name)
+    if existing_image:
+        print(f"[Image] Using existing image for {botanical_name}")
+        return existing_image
+    
+    print(f"[Image] Generating new image for {botanical_name}")
+    
+    # Generate new image
+    client = get_openai_client()
+    prompt = build_image_prompt(botanical_name)
+    
+    response = client.images.generate(
+        model="gpt-image-1",
+        prompt=prompt,
+        size="1024x1024",  # Fixed to literal string
+        n=1,
+    )
+    
+    # Validate response
+    if not response.data or len(response.data) == 0:
+        raise ValueError(f"No image data returned for {botanical_name}")
+    
+    # Get base64 image from response
+    b64_image = response.data[0].b64_json
+    
+    if not b64_image:
+        raise ValueError(f"No b64_json in response for {botanical_name}")
+    
+    # Save to disk for future use
+    img_bytes = base64.b64decode(b64_image)
+    image_path = get_image_path(botanical_name)
+    
+    with open(image_path, "wb") as f:
+        f.write(img_bytes)
+    
+    print(f"[Image] Saved image to {image_path}")
+    
+    return b64_image
+
+
+# =============================================================================
 # PUBLIC API
 # =============================================================================
 def search_plants(query: str, max_results: int | None = None) -> List[str]:
     """
     Search for plants using natural language query.
-    
-    Args:
-        query: Natural language search query
-               Examples: "tall trees for shade", "butterfly-attracting plants",
-                        "groundcovers for full sun", "native species with red flowers"
-        max_results: Maximum number of results to return (defaults to settings.rag_max_results)
-        
-    Returns:
-        List of botanical names matching the query
-        Empty list if no matches found
-        
-    Examples:
-        >>> search_plants("shade-loving groundcovers")
-        ['Ficus pumila', 'Wedelia trilobata']
-        
-        >>> search_plants("trees that attract birds")
-        ['Syzygium grande', 'Ficus benjamina', ...]
+    Returns list of botanical names.
     """
     if max_results is None:
         max_results = settings.rag_max_results
@@ -329,16 +375,41 @@ def search_plants(query: str, max_results: int | None = None) -> List[str]:
     return plants[:max_results]
 
 
-def get_plant_details(botanical_name: str) -> Optional[dict]:
+def search_plants_with_images(query: str, max_results: int | None = None) -> List[Dict]:
     """
-    Get detailed information about a specific plant from the vector store.
+    Search for plants and return botanical name + image for each.
     
-    Args:
-        botanical_name: Exact or partial botanical name
-        
     Returns:
-        Dictionary with plant details or None if not found
+        List of dicts with 'botanical_name' and 'image' (base64 PNG)
     """
+    if max_results is None:
+        max_results = settings.rag_max_results
+    
+    # Get plant names from search
+    plant_names = search_plants(query, max_results)
+    
+    # Get/generate image for each plant
+    results = []
+    for botanical_name in plant_names:
+        try:
+            image = generate_plant_image(botanical_name)
+            results.append({
+                "botanical_name": botanical_name,
+                "image": image  # base64 PNG
+            })
+        except Exception as e:
+            print(f"[Error] Failed to get image for {botanical_name}: {e}")
+            # Still include the plant but with no image
+            results.append({
+                "botanical_name": botanical_name,
+                "image": None
+            })
+    
+    return results
+
+
+def get_plant_details(botanical_name: str) -> Optional[dict]:
+    """Get detailed information about a specific plant from the vector store."""
     retriever = get_retriever(k=1)
     
     # Search for exact match
@@ -360,12 +431,7 @@ def get_plant_details(botanical_name: str) -> Optional[dict]:
 
 
 def rebuild_database() -> dict:
-    """
-    Force rebuild the ChromaDB database.
-    
-    Returns:
-        Status dictionary with success/error message
-    """
+    """Force rebuild the ChromaDB database."""
     try:
         init_chroma(force_rebuild=True)
         return {"success": True, "message": "Database rebuilt successfully"}
@@ -381,20 +447,12 @@ if __name__ == "__main__":
     print("Initializing ChromaDB...")
     init_chroma()
     
-    # Test queries
-    test_queries = [
-        "Which groundcovers are suitable for close turfing in full sun?",
-        "Which plants attract butterflies?",
-        "Which tall and fast-growing plants require little maintenance?",
-        "Which plants form dense mats suitable for covering bare soil?",
-        "native trees with red flowers",
-    ]
+    # Test search with images
+    query = "tall trees for shade"
+    print(f"\nSearching: {query}")
+    results = search_plants_with_images(query, max_results=3)
     
-    for query in test_queries:
-        print(f"\n{'='*80}")
-        print(f"Q: {query}")
-        print(f"{'='*80}")
-        results = search_plants(query)
-        print(f"Found {len(results)} plants:")
-        for plant in results:
-            print(f"  - {plant}")
+    print(f"\nFound {len(results)} plants:")
+    for plant in results:
+        print(f"  - {plant['botanical_name']}")
+        print(f"    Image: {'✓' if plant['image'] else '✗'}")
