@@ -37,6 +37,7 @@ try:
         # Note: If GOOGLE_APPLICATION_CREDENTIALS is set, you don't need to pass credentials=
         credentials=credentials
     )
+    storage_client = storage.Client(credentials=credentials, project=PROJECT_ID)
     print(f"Vertex AI SDK initialized successfully for project: {PROJECT_ID}")
 except Exception as e:
     print(f"ERROR: Failed to initialize Vertex AI SDK. Check your Project ID, Location, and permissions. Details: {e}")
@@ -135,6 +136,11 @@ def _b64_to_image_bytes(b64_string: str) -> bytes:
             raise ValueError(f"Decoded image bytes are too small ({len(img_bytes)} bytes). Input Base64 may be corrupt.")
             
         img_pil = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+
+        img_buf = io.BytesIO()
+        img_pil.save(img_buf, format="PNG") # Use PNG to avoid compression artifacts
+        
+        return img_buf.getvalue()
         # ... rest of function
     except (binascii.Error, ValueError) as e:
         # Catch decoding errors and re-raise with context
@@ -158,7 +164,6 @@ def upload_bytes_to_gcs(
     """
     
     # 1. Initialize Client
-    storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
     
     # 2. Create a unique blob name to avoid conflicts
@@ -189,7 +194,6 @@ def delete_gcs_file(gcs_uri: str):
         bucket_name, blob_name = path.split("/", 1)
         
         # 2. Delete the blob
-        storage_client = storage.Client()
         bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(blob_name)
         blob.delete()
@@ -386,8 +390,8 @@ def vertex_ai_image_edit_mask(
 
     # 3. Create Reference Objects using the uploaded file objects
     # These objects now contain the GCS URI, which the model requires.
-    source_image = RawReferenceImage(gcs_uri=base_uri)
-    mask_image = MaskReferenceImage(gcs_uri=mask_uri)
+    source_image = RawReferenceImage(base_uri)
+    mask_image = MaskReferenceImage(mask_uri)
     
     print("Calling Vertex AI Imagen for localized editing...")
     
