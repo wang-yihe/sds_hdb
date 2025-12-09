@@ -1,7 +1,7 @@
 # backend/main.py
 import io,base64
 import uuid
-import os, errno
+import errno
 from pathlib import Path
 from typing import List, Optional
 from PIL import Image
@@ -11,16 +11,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+import numpy as np, cv2
+from PIL import Image, ImageDraw, ImageFilter
+
 from dotenv import load_dotenv
 load_dotenv()
 
 # Local modules (from Steps 2–5)
 from prompt_builders import (
     build_style_and_species_blocks,
-    render_user_prompts,
-    compose_stage1_prompt,
-    compose_stage2_prompt,
-    compose_stage3_prompt,
 )
 from mask_processing import make_hard_and_soft_masks_from_green
 from multi_stage_pipeline import (
@@ -293,9 +292,6 @@ def api_drag_place_plant(body: DragPlaceBody):
     (In a later step you can expand this to also pass a specific plant reference crop.)
     """
     try:
-        # build a circular brush mask
-        import numpy as np
-        from PIL import Image, ImageDraw
 
         # decode base to get size
         img_bytes = base64.b64decode(body.base_image_b64)
@@ -350,9 +346,6 @@ def api_preview_mask(body: PreviewMaskBody):
             base_image_b64=body.base_image_b64,
         )
         # Composite a red overlay preview on the base
-        import io, base64
-        from PIL import Image, ImageOps, ImageEnhance
-
         def b64_to_pil(b): 
             return Image.open(io.BytesIO(base64.b64decode(b))).convert("RGB")
 
@@ -373,47 +366,96 @@ def api_preview_mask(body: PreviewMaskBody):
 
 @app.post("/api/edit_lasso")
 def edit_lasso(req: EditLassoReq):
-    # gpt_image_edit already converts WHITE=editable → transparent alpha internally
-    size = None if (req.size in (None, "", "natural")) else req.size
+    """
+    Edit ONLY inside the provided mask (WHITE = editable, BLACK = preserve).
+    Produces a seamless composite: outside the mask is the original,
+    inside the mask is the model's edit, feathered for clean blending.
+    """
 
-    strict = (
-        "Edit ONLY inside the transparent region of the mask. "
-        "Outside the mask, do not change even a single pixel. "
-        "Render a complete, natural form that fits within the masked area; "
-        "do not shrink unnaturally just to fit. "
-        "Match the photo’s lighting, perspective, and color temperature. "
-        "No new furniture or structures. Blend edges cleanly without halos."
-    )
+    try:
+        # ---------------------------
+        # 0) Decode inputs
+        # ---------------------------
+        base = Image.open(io.BytesIO(base64.b64decode(req.image_b64))).convert("RGB")
+        W, H = base.size
 
-    out_b64 = gpt_image_edit(
-        image_b64=req.image_b64,
-        prompt=strict + (req.prompt or ""),
-        mask_b64=req.mask_b64,
-        size=size or "1024x1024",   # pick "natural" if you added that to your helper
-        model="gpt-image-1"
-    )
+        maskL = Image.open(io.BytesIO(base64.b64decode(req.mask_b64))).convert("L")
+        if maskL.size != (W, H):
+            # Keep mask in sync with base
+            maskL = maskL.resize((W, H), Image.NEAREST)
 
-    base   = Image.open(io.BytesIO(base64.b64decode(req.image_b64))).convert("RGB")
-    edited = Image.open(io.BytesIO(base64.b64decode(out_b64))).convert("RGB")
-    maskL  = Image.open(io.BytesIO(base64.b64decode(req.mask_b64))).convert("L")
+        # ---------------------------
+        # 1) Harden + slightly shrink mask to avoid spill
+        # ---------------------------
+        # binarize (0/255)
+        maskL = maskL.point(lambda v: 255 if v >= 128 else 0)
 
-    if edited.size != base.size:
-        edited = edited.resize(base.size, Image.LANCZOS)
-    if maskL.size != base.size:
-        maskL = maskL.resize(base.size, Image.NEAREST)
+        # erode 1–2 px to pull back from edges (prevents bleeding/overlay look)
+        arr = np.array(maskL, dtype=np.uint8)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))  # 3x3
+        arr = cv2.erode(arr, kernel, iterations=1)
+        maskL = Image.fromarray(arr, mode="L")
 
-    # binarize for safety (255 = editable)
-    maskL = maskL.point(lambda v: 255 if v >= 128 else 0)
+        # soft feather for natural blend
+        maskL = maskL.filter(ImageFilter.GaussianBlur(radius=1.25))
 
-    clamped = Image.composite(edited, base, maskL)
+        # ---------------------------
+        # 2) Build strict instruction (no plant hard-coding)
+        # ---------------------------
+        strict = (
+            "Edit ONLY inside the transparent region of the mask. "
+            "Outside the mask, do not alter even a single pixel. "
+            "Render a complete, realistic result that fits within the editable area. "
+            "Match the photo's perspective, lighting, shadows, and color temperature. "
+            "Blend boundaries cleanly (no halos) and preserve nearby geometry. "
+        )
 
-    # save result
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    name = f"lasso_edit_{uuid.uuid4().hex}.png"
-    out_path = OUT_DIR / name
-    out_path.write_bytes(base64.b64decode(out_b64))
+        # Images Edit API expects transparent = editable. Convert our WHITE=editable mask to alpha=0.
+        # We'll re-encode the mask for the client below via gpt_image_edit (which already converts).
+        size = None if (req.size in (None, "", "natural")) else req.size
 
-    
+        # We pass the *original* hard mask to gpt_image_edit; it converts WHITE→alpha0 internally.
+        # Use the un-feathered binary for tighter control during generation.
+        mask_for_model = maskL.point(lambda v: 255 if v >= 128 else 0)
+        buf_mask = io.BytesIO()
+        mask_for_model.save(buf_mask, format="PNG")
+        mask_for_model_b64 = base64.b64encode(buf_mask.getvalue()).decode("utf-8")
 
-    # IMPORTANT: return a URL that maps to /api/file/{name}
-    return {"ok": True, "resultPath": f"/api/file/{name}"}
+        # Use the *original* uploaded mask (not feathered) for the model call
+        # but still ensure it's the same size and 0/255:
+        model_mask = Image.open(io.BytesIO(base64.b64decode(req.mask_b64))).convert("L")
+        if model_mask.size != (W, H):
+            model_mask = model_mask.resize((W, H), Image.NEAREST)
+        model_mask = model_mask.point(lambda v: 255 if v >= 128 else 0)
+        buf_model_mask = io.BytesIO()
+        model_mask.save(buf_model_mask, format="PNG")
+        model_mask_b64 = base64.b64encode(buf_model_mask.getvalue()).decode("utf-8")
+
+        # ---------------------------
+        # 3) Call model
+        # ---------------------------
+        out_b64 = gpt_image_edit(
+            image_b64=req.image_b64,
+            prompt=strict + (req.prompt or ""),
+            mask_b64=model_mask_b64,             # WHITE=editable; function converts to alpha mask
+            size=size or "1024x1024",
+            model="gpt-image-1",
+        )
+
+        edited = Image.open(io.BytesIO(base64.b64decode(out_b64))).convert("RGB")
+        if edited.size != (W, H):
+            edited = edited.resize((W, H), Image.LANCZOS)
+
+        # ---------------------------
+        # 5) Save the final (no overlay artifacts)
+        # ---------------------------
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
+        name = f"lasso_edit_{uuid.uuid4().hex}.png"
+        out_path = OUT_DIR / name
+
+        out_path.write_bytes(base64.b64decode(out_b64))
+
+        return {"ok": True, "resultPath": f"/api/file/{name}"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

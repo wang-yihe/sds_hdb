@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from PIL import Image
 import numpy as np
 import cv2
+import io
 
 # Load .env from this backend folder explicitly
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
@@ -121,8 +122,6 @@ def gpt_image_edit(
     Ensures: mask is EXACTLY same size as image and is a PNG with transparency
     where transparent pixels indicate the editable area.
     """
-    from PIL import Image, ImageOps
-    import io
 
     # Decode base image -> normalize to PNG bytes (to avoid EXIF/orientation issues)
     img_bytes = base64.b64decode(image_b64)
@@ -148,13 +147,19 @@ def gpt_image_edit(
         # Tighten the mask so the model can’t “paint” over bed edges
         m_pil = _erode_binary_pil(m_pil, px=4)
 
+        #Grow mask to allow full canopy/crown in the edit
+        if dilate_px and dilate_px > 0:
+            arr = np.array(m_pil) >= 128
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (dilate_px, dilate_px))
+            grown = cv2.dilate(arr.astype("uint8") * 255, kernel, iterations=1)
+            m_pil = Image.fromarray(grown, mode="L")
+
         # Ensure hard 0/255
         m_pil = m_pil.point(lambda v: 255 if v >= 128 else 0).convert("L")
 
         # Our masks so far used WHITE=editable. For OpenAI Edits:
         #   transparent = editable  -> alpha = 0 where m_pil==255
         #   opaque      = keep      -> alpha = 255 where m_pil==0
-        import numpy as np
         arr = np.array(m_pil)  # 0 or 255
         
         if edit_opaque_area:
