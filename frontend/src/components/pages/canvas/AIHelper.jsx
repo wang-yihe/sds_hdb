@@ -550,8 +550,10 @@ const AIHelper = (props) => {
                     >
                       {/* Show plant thumbnail */}
                       {plant.image && (
-                        <img 
-                          src={`data:image/png;base64,${plant.image}`}
+                        <img
+                          src={plant.image.startsWith('/canvas-assets/') || plant.image.startsWith('http') || plant.image.startsWith('data:')
+                            ? plant.image
+                            : `data:image/png;base64,${plant.image}`}
                           alt={plant.botanical_name}
                           style={{
                             width: '20px',
@@ -644,8 +646,10 @@ const AIHelper = (props) => {
                       >
                         {/* Plant thumbnail */}
                         {plant.image && (
-                          <img 
-                            src={`data:image/png;base64,${plant.image}`}
+                          <img
+                            src={plant.image.startsWith('/canvas-assets/') || plant.image.startsWith('http') || plant.image.startsWith('data:')
+                              ? plant.image
+                              : `data:image/png;base64,${plant.image}`}
                             alt={plant.botanical_name}
                             style={{
                               width: '60px',

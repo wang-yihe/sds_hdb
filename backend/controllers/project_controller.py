@@ -3,11 +3,38 @@ from typing import List
 import traceback
 import uuid
 from pathlib import Path
-from schemas.project_schema import ProjectCreate, ProjectUpdate, ProjectResponse, CollaboratorAdd
+from bson import ObjectId
+from schemas.project_schema import ProjectCreate, ProjectUpdate, ProjectResponse, CollaboratorAdd, CollaboratorInfo
 from services.project_service import ProjectService
+from models.user_model import User
 
 
 class ProjectController:
+
+    @staticmethod
+    async def _get_collaborators_info(collaborator_ids: List) -> List[CollaboratorInfo]:
+        """Helper method to fetch collaborator details from user IDs"""
+        collaborators = []
+        for collab_id in collaborator_ids:
+            try:
+                # collab_id might already be ObjectId or string, handle both
+                if isinstance(collab_id, str):
+                    user_id = ObjectId(collab_id)
+                else:
+                    user_id = collab_id
+
+                user = await User.get(user_id)
+                if user:
+                    collaborators.append(CollaboratorInfo(
+                        id=str(user.id),
+                        email=user.email
+                    ))
+                else:
+                    print(f"Warning: User not found for ID {collab_id}")
+            except Exception as e:
+                print(f"Warning: Could not fetch user {collab_id}: {e}")
+                continue
+        return collaborators
     
     @staticmethod
     async def create_project(
@@ -39,19 +66,21 @@ class ProjectController:
     ) -> List[ProjectResponse]:
         try:
             projects = await ProjectService.get_user_projects(current_user["id"])
-            return [
-                ProjectResponse(
+            responses = []
+            for project in projects:
+                collaborators = await ProjectController._get_collaborators_info(project.collaborator_ids)
+                responses.append(ProjectResponse(
                     id=str(project.id),
                     name=project.name,
                     description=project.description,
                     owner_id=str(project.owner_id),
                     collaborator_ids=[str(cid) for cid in project.collaborator_ids],
+                    collaborators=collaborators,
                     thumbnail=project.thumbnail,
                     created_at=project.created_at,
                     updated_at=project.updated_at
-                )
-                for project in projects
-            ]
+                ))
+            return responses
         except Exception as e:
             traceback.print_exc()
             raise HTTPException(
@@ -202,13 +231,15 @@ class ProjectController:
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Project not found"
                 )
-            
+
+            collaborators = await ProjectController._get_collaborators_info(updated_project.collaborator_ids)
             return ProjectResponse(
                 id=str(updated_project.id),
                 name=updated_project.name,
                 description=updated_project.description,
                 owner_id=str(updated_project.owner_id),
                 collaborator_ids=[str(cid) for cid in updated_project.collaborator_ids],
+                collaborators=collaborators,
                 thumbnail=updated_project.thumbnail,
                 created_at=updated_project.created_at,
                 updated_at=updated_project.updated_at
@@ -252,13 +283,15 @@ class ProjectController:
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Project not found"
                 )
-            
+
+            collaborators = await ProjectController._get_collaborators_info(updated_project.collaborator_ids)
             return ProjectResponse(
                 id=str(updated_project.id),
                 name=updated_project.name,
                 description=updated_project.description,
                 owner_id=str(updated_project.owner_id),
                 collaborator_ids=[str(cid) for cid in updated_project.collaborator_ids],
+                collaborators=collaborators,
                 thumbnail=updated_project.thumbnail,
                 created_at=updated_project.created_at,
                 updated_at=updated_project.updated_at

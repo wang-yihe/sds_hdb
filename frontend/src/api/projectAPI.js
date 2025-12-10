@@ -62,8 +62,8 @@ const addCollaborator = async (projectId, email) => {
 
 const removeCollaborator = async (projectId, email) => {
     try {
-        const response = await axiosInstance.delete(`/project/${projectId}/remove_collaborator`, { 
-            data: { email }
+        const response = await axiosInstance.delete(`/project/${projectId}/remove_collaborator`, {
+            params: { email }  // Changed from 'data' to 'params' for query parameter
         });
         return response;
     } catch (error) {

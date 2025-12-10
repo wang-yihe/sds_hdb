@@ -13,18 +13,3 @@ class VideoGenerationController:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error generating video: {str(e)}"
             )
-
-    @staticmethod
-    async def get_video_file(filename: str):
-        try:
-            return await VideoGenerationService.get_video_file(filename)
-        except FileNotFoundError as e:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=str(e)
-            )
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error retrieving video file: {str(e)}"
-            )

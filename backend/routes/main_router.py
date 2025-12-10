@@ -8,8 +8,8 @@ from sub_routes.canvas_routes import app as canvas_router
 from sub_routes.user_routes import app as user_router
 from sub_routes.ai_routes import app as ai_router
 from sub_routes.project_routes import app as project_router
-from sub_routes.RAG_routes import app as rag_router
-
+from sub_routes.rag_routes import app as rag_router
+from sub_routes.video_generation_routes import app as video_generation_router
 # Create main router
 main_router = APIRouter()
 
@@ -29,3 +29,4 @@ main_router.include_router(user_router, prefix="/user", tags=["user"], dependenc
 main_router.include_router(ai_router, prefix="/ai", tags=["ai"], dependencies=[Depends(authenticate_jwt)])  
 main_router.include_router(project_router, prefix="/project", tags=["project"], dependencies=[Depends(authenticate_jwt)])
 main_router.include_router(rag_router, prefix="/rag", tags=["rag"], dependencies=[Depends(authenticate_jwt)])
+main_router.include_router(video_generation_router, prefix="/video", tags=["video"], dependencies=[Depends(authenticate_jwt)])

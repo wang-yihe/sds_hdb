@@ -93,32 +93,20 @@ class AIService:
                 size=body.size,
                 stage3_use_soft_mask=body.stage3_use_soft_mask,
             )
-            
-            # Read the generated image file and convert to base64
-            final_path = result["finalPath"]
-            
-            with open(final_path, "rb") as f:
-                image_bytes = f.read()
-            
-            # Convert to base64
-            import base64
-            image_b64 = base64.b64encode(image_bytes).decode('utf-8')
-            
+
+            # Get the base64 image directly from result (no file I/O needed)
+            image_b64 = result["final_b64"]
+
             # Create data URL for frontend
             image_data_url = f"data:image/png;base64,{image_b64}"
-            
-            # Return both the URL path and the base64 data
-            def _p(path_str: str) -> str:
-                return f"/api/file/{Path(path_str).name}"
-            
+
             return {
                 "success": True,
                 "image": image_data_url,  # Base64 for immediate display
                 "stage1": {
-                    "resultPath": _p(result["stage1"]["resultPath"]),
+                    "result_b64": result["stage1"]["result_b64"],
                     "prompt": result["stage1"]["prompt"],
                 },
-                "finalPath": _p(result["finalPath"]),
                 "style_block": result["style_block"],
                 "species_block": result["species_block"],
             }

@@ -268,7 +268,7 @@ def run_stage1_layout(
     Stage 1: layout + style + canopy freedom.
     - Builds prompt (Option B) for Stage 1.
     - If green overlay is provided, derive SOFT mask (for canopy freedom).
-    - Returns (out_path, final_prompt, mask_used_b64).
+    - Returns (out_b64, final_prompt, mask_used_b64).
     """
     # Build user block
     user_block = render_user_prompts(user_prompts or [])
@@ -303,9 +303,8 @@ def run_stage1_layout(
     # except Exception:
     #     pass
 
-    out_path = _save_b64_png(out_b64, "stage1")
-
-    return out_path, prompt, (mask_b64 or "")
+    # Return base64 directly instead of saving to disk
+    return out_b64, prompt, (mask_b64 or "")
 
 
 # -----------------------
@@ -432,7 +431,7 @@ def generate_all_smart(
     )
 
     # 2) Stage 1
-    s1_path, s1_prompt, s1_mask = run_stage1_layout(
+    s1_b64, s1_prompt, s1_mask = run_stage1_layout(
         base_image_b64=base_image_b64,
         style_block=style_block,
         species_block=species_block,
@@ -447,9 +446,9 @@ def generate_all_smart(
         "species_block": species_block,
 
         "stage1": {
-            "resultPath": s1_path,
+            "result_b64": s1_b64,  # Return base64 instead of file path
             "prompt": s1_prompt,
             "maskUsedB64": s1_mask,
         },
-        "finalPath": s1_path,
+        "final_b64": s1_b64,  # Return base64 instead of file path
     }
