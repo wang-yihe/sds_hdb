@@ -10,7 +10,7 @@ This module:
   Stage 3: Global blend / color harmony (very light touch)
 """
 
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 from utils.ai_helper import gpt_vision_summarize, b64_to_data_url
 
 
@@ -36,10 +36,42 @@ _STYLE_SYS_MSG = (
     "No extra commentary."
 )
 
+def _inject_species_hint(species_block: str, hint: Optional[str]) -> str:
+    """Insert a mandatory species constraint into the [PLANT_SPECIES] block."""
+    if not hint:
+        return species_block
+    hint = hint.strip()
+    if not hint:
+        return species_block
+
+    # Ensure we have a header we can inject under
+    if "[PLANT_SPECIES]" not in species_block.upper():
+        species_block = "[PLANT_SPECIES]\n" + species_block.strip()
+
+    lines = species_block.splitlines()
+    # Find the header line (case-insensitive)
+    header_idx = next(
+        (i for i, ln in enumerate(lines) if ln.strip().upper() == "[PLANT_SPECIES]"),
+        0
+    )
+    insert_idx = header_idx + 1
+
+    hint_block = [
+        f"PRIORITY SPECIES CONSTRAINT: '{hint}'.",
+        "- Treat as mandatory. If any uploaded plant refs conflict, prefer this species.",
+        "- Match true morphology (trunk thickness/rings, crown architecture, leaf/frond shape, color, size).",
+        "- Use only vegetation; do not add benches, planters, or other hardscape.",
+        "- Use Singapore-suitable species and realistic horticultural density.",
+        ""
+    ]
+    lines[insert_idx:insert_idx] = hint_block
+    return "\n".join(lines)
+
 def build_style_and_species_blocks(
     base_image_b64: str,
     style_refs_b64: List[str],
     plant_refs_b64: List[str],
+    species_hint: Optional[str] = None,
     vision_model: str = "gpt-5.1",
     max_tokens: int = 650
 ) -> Tuple[str, str]:
@@ -55,6 +87,12 @@ def build_style_and_species_blocks(
         {"type": "text", "text": "PERSPECTIVE (context for scale/lighting):"},
         {"type": "image_url", "image_url": {"url": b64_to_data_url(base_image_b64)}},
     ]
+
+    if species_hint:
+        content.append({
+            "type": "text",
+            "text": f"TARGET SPECIES (strong hint, mandatory if plausible): {species_hint}"
+        })
 
     if style_refs_b64:
         content.append({"type": "text", "text": "STYLE REFERENCES (same style theme):"})
@@ -92,6 +130,8 @@ def build_style_and_species_blocks(
         style_block = raw.strip()
         species_block = ""
 
+    species_block = _inject_species_hint(species_block, species_hint)
+
     return style_block, species_block
 
 
@@ -104,7 +144,7 @@ def render_user_prompts(items: List[dict]) -> str:
         items = []
 
     lines = []
-    
+
     # Global mandatory rules (ALWAYS ADDED)
     lines.append("CRITICAL GLOBAL RULES:")
     lines.append("- Only add plants inside the provided mask.")
@@ -124,17 +164,81 @@ def render_user_prompts(items: List[dict]) -> str:
     return "\n".join(lines)
 
 
+
 # =========================
 # Option B: Clean LA Visualization — Shared rules
 # =========================
 
+_SHARED_PERSPECTIVE_ANALYSIS = (
+    "PERSPECTIVE ANALYSIS (read BEFORE editing):\n"
+    "- Analyse the perspective image carefully.\n"
+    "- Identify and respect all visible hardscape: tiles, planters, parapet walls, railings, benches, steps.\n"
+    "- Understand exact planting bed boundaries inside the mask; do NOT exceed them.\n"
+    "- Maintain the existing camera angle, vanishing lines, horizon, and spatial depth.\n"
+    "- Detect lighting direction, shadow quality, and atmospheric conditions from the perspective.\n"
+    "- Match all new plants to the real site's scale, depth, and lighting.\n"
+    "- The perspective image is the PRIMARY reference source. Style references are SECONDARY (mood only).\n"
+)
+
+_SHARED_COMMON_KNOWN = (
+    "Edit only the transparent (editable) pixels.\n"
+    "Do not modify any opaque/kept pixel.\n"
+    "Do not add or change hardscape: no planters, curbs, edging, benches, walls, railings, or paving.\n"
+    "Only add living plants inside the editable zones. Roots/bases must sit fully within the editable area.\n"
+    "Keep the background, horizon, buildings, and sky unchanged.\n"
+    "Use realistic lighting and materials that match the base photo. Avoid plastic or cartoony look.\n"
+    "Prefer Singapore-suitable plantings. Maintain perspective and scale consistent with the base image.\n"
+)
+
 _SHARED_HARDSCAPE_RULES = (
     "HARDSCAPE (pixel-locked outside mask):\n"
     "- Preserve buildings, skyline, parapet walls, railings, benches, paving/tiles, planter edges.\n"
-    "- Do NOT alter camera angle, perspective lines, or background geometry.\n"
-    "- Do NOT add plants outside of green areas\n"
-    "- Only add plants to green areas\n"
-    "- Do NOT add other thing such as benches\n"
+    "- Do NOT alter camera angle, focal length, perspective lines, or background geometry.\n"
+    "- Do NOT enlarge planters or expand the site to fit plants.\n"
+    "- Add plants ONLY inside the green planting mask.\n"
+    "- Do NOT create or modify any hardscape: NO new paths, arches, trellises, pergolas, planters, lights, or walls.\n"
+)
+
+_SHARED_FORM_RULES = (
+    "FORM CONSTRAINTS (shape-based):\n"
+    "  • Do NOT generate spherical foliage masses or ball-like forms at any location.\n"
+    "  • Keep trunk base fully visible at soil line; avoid mound-shaped occlusion or bushy bases.\n"
+    "  • Respect planter footprint exactly; no foliage spilling onto tiles, benches, or walls.\n"
+    "  • Foliage silhouettes must match the natural growth habit of the species.\n"
+)
+
+_MASK_RULES_BLOCK = (
+"MASK RULES (CRITICAL — DO NOT VIOLATE):\n"
+"- Only place vegetation inside the editable mask area.\n"
+"- Never modify or add anything outside the mask (treat outside as LOCKED).\n"
+"- Do not extend soil, planters, or foliage beyond mask boundaries.\n"
+"- Background buildings, sky, railings, walls, and flooring must remain unchanged.\n"
+"- Preserve the base image's camera angle, perspective lines, horizon, and lighting.\n"
+)
+
+_SHARED_SPECIES_RULES = (
+    "SPECIES CONSTRAINTS (from plant reference images):\n"
+    "- Use ONLY the species shown in the plant reference images.\n"
+    "- Replicate natural morphology accurately (trunk, crown, leaf shape, frond orientation, texture, color).\n"
+    "- Maintain proportional height relative to planter scale.\n"
+    "- Max 1–2 specimens per planter unless user specifies otherwise.\n"
+    "- Trunk/root origin MUST be inside the green planting mask.\n"
+    "- Trunk base must remain visible; do NOT hide with foliage.\n"
+)
+
+_SHARED_STYLE_CONTEXT_RULES = (
+    "STYLE CONTEXT (vibe-only from references):\n"
+    "  • Use style references ONLY for mood, palette, and texture cues.\n"
+    "  • Do NOT restyle or redesign the site; style must NOT change geometry or add hardscape.\n"
+    "  • Preserve original lighting, color temperature, and shadow direction of the perspective image.\n"
+    "  • Blend plants with realistic contact shadows and mild ambient occlusion.\n"
+)
+
+_SHARED_CLIMATE_RULES = (
+    "CLIMATE CHECK — SINGAPORE TROPICAL CONDITIONS:\n"
+    "- Use ONLY plant species that can realistically survive in Singapore's hot-humid climate.\n"
+    "- If the provided plant references show a species unsuitable for this climate, choose the closest tropical analogue with the SAME morphology.\n"
+    "- Maintain realistic size relative to planter scale; avoid exaggerated tree canopies.\n"
 )
 
 _SHARED_PLANTING_ZONE_RULES = (
@@ -150,6 +254,14 @@ _SHARED_INTEGRATION_RULES = (
     "- Add correct contact shadows and mild ambient occlusion at bases.\n"
     "- Avoid cut-out edges; keep frond/leaf edges crisp and realistic.\n"
     "- Keep clarity of circulation and seating; do NOT plant on paths, benches, or walls."
+)
+
+_SHARED_PROHIBITIONS = (
+    "PROHIBITIONS — HARD RESTRICTIONS:\n"
+    "  • Do NOT create new hardscape: no new paths, arches, pergolas, trellises, planters, lights, or walls.\n"
+    "  • Do NOT restyle, recolor, or redesign existing hardscape elements.\n"
+    "  • Do NOT enlarge planters or expand the space to fit foliage.\n"
+    "  • Do NOT generate clipped, topiary-like shapes or stylized blob foliage.\n"
 )
 
 def _style_heading() -> str:
@@ -170,24 +282,64 @@ def compose_stage1_prompt(
 ) -> str:
     """
     Stage 1: Layout + placement + canopy freedom.
-    Use SOFT canopy mask when calling the image edit.
+    (Upgraded with deeper perspective analysis + Singapore climate + shape constraints)
     """
     parts = [
-        "STAGE 1 — LAYOUT + STYLE APPLICATION (with canopy freedom)",
+        "STAGE 1 — LAYOUT & CONTEXTUAL INSERTION (PLANT-ONLY)",
+
+        # NEW: Perspective understanding FIRST
+        "PERSPECTIVE UNDERSTANDING:",
+        _SHARED_PERSPECTIVE_ANALYSIS,
+        "",
+
+        _SHARED_COMMON_KNOWN,
+        "",
+
+        # HARD GEOMETRY LOCK (keep your existing block)
         _SHARED_HARDSCAPE_RULES,
+        "",
+
+        # FORM & SHAPE CONTROL
+        "PLANT FORM RULES:",
+        _SHARED_FORM_RULES,
+        "",
+
+        # CLIMATE RULES
+        "CLIMATE RULES:",
+        _SHARED_CLIMATE_RULES,
+        "",
+
+        # PROHIBITIONS (negative behaviours to avoid)
+        "PROHIBITIONS:",
+        _SHARED_PROHIBITIONS,
+        "",
+
+        # YOUR EXISTING ZONE RULES (still okay)
         _SHARED_PLANTING_ZONE_RULES,
         "",
-        _style_heading(),
-        style_block or "(no style extracted)",
+
+        _MASK_RULES_BLOCK,
         "",
+
+        # STYLE BLOCK (but demoted to vibe-only)
+        _style_heading(),
+        "STYLE INSTRUCTION — USE FOR MOOD/PALETTE ONLY (NOT LAYOUT):",
+        (style_block or "(no style extracted)"),
+        "",
+
+        # SPECIES BLOCK
         _species_heading(),
-        species_block or "(no species extracted)",
+        (species_block or "(no species extracted)"),
         species_lock_block(species_block),
         "",
+
+        # VISUAL QUALITY (optional to keep)
         _SHARED_INTEGRATION_RULES,
     ]
+
     if user_block.strip():
         parts += ["", user_block]
+
     return "\n".join(parts)
 
 
@@ -229,26 +381,45 @@ def compose_stage3_prompt(
     user_block: str
 ) -> str:
     """
-    Stage 3: Very light global harmonization (usually no mask or a very soft large mask).
+    Single-pass generation — geometry → form → climate → prohibitions → species → style.
+    Plant-only edit; no new hardscape.
     """
     parts = [
-        "STAGE 3 — GLOBAL HARMONIZATION (light blend, no layout changes)",
+        "SINGLE PASS — CONTEXTUAL PLANT INSERTION (PLANT-ONLY EDIT)",
+
+        # 1) Hardscape lock
         _SHARED_HARDSCAPE_RULES,
-        "- Do NOT move plants; keep Stage 1 placement and Stage 2 anatomy intact.\n",
         "",
-        _style_heading(),
-        (style_block or "(no style extracted)") + "\n"
-        "- Subtle color grading so the output matches a clean architectural visualization.",
+
+        # 2) Shape/placement discipline
+        "PLANT FORM RULES:",
+        _SHARED_FORM_RULES,
         "",
-        _species_heading(),
-        species_block or "(no species extracted)",
-        species_lock_block(species_block),
+
+        # 3) Singapore climate suitability
+        "CLIMATE RULES:",
+        _SHARED_CLIMATE_RULES,
         "",
-        _SHARED_INTEGRATION_RULES,
-        "- Remove minor artifacts/halos; keep details crisp.",
+
+        # 4) Prohibitions (acts like a negative prompt)
+        _SHARED_PROHIBITIONS,
+        "",
+
+        # 5) Species notes from vision (dynamic, not hardcoded)
+        "SPECIES NOTES (from plant references):",
+        (species_block or "(no species extracted)"),
+        "",
+
+        # 6) Style limited to 'vibe only'
+        "STYLE RULES:",
+        _SHARED_STYLE_CONTEXT_RULES,
+        (style_block or "(no style extracted)"),
+        "",
+
+        # 7) User extras
+        "USER REQUESTS:",
+        (user_block or "(none)"),
     ]
-    if user_block.strip():
-        parts += ["", user_block]
     return "\n".join(parts)
 
 
@@ -262,25 +433,41 @@ def compose_single_pass_prompt(
     user_block: str
 ) -> str:
     """
-    Single-pass generation (if you want to do everything in one edit call).
-    Not recommended for maximum fidelity, but available.
+    Single-pass generation — geometry → form → climate → species → style.
+    Plant-only edit; no new hardscape.
     """
     parts = [
-        "SINGLE PASS — CLEAN LANDSCAPE-ARCHITECT VISUALIZATION",
+        "SINGLE PASS — CONTEXTUAL PLANT INSERTION (PLANT-ONLY EDIT)",
+
+        # 1) Hardscape lock
         _SHARED_HARDSCAPE_RULES,
-        _SHARED_PLANTING_ZONE_RULES,
         "",
-        _style_heading(),
-        style_block or "(no style extracted)",
+
+        # 2) Shape/placement discipline
+        "PLANT FORM RULES:",
+        _SHARED_FORM_RULES,
         "",
-        _species_heading(),
-        species_block or "(no species extracted)",
+
+        # 3) Singapore climate suitability
+        "CLIMATE RULES:",
+        _SHARED_CLIMATE_RULES,
         "",
-        _SHARED_INTEGRATION_RULES,
-        "- Maintain separation from clipped hedges/topiary; avoid silhouette merging.",
+
+        # 4) Species block extracted from vision (still dynamic)
+        "SPECIES NOTES (from plant references):",
+        (species_block or "(no species extracted)"),
+        "",
+
+        # 5) Style limited to 'vibe only'
+        "STYLE RULES:",
+        _SHARED_STYLE_CONTEXT_RULES,
+        (style_block or "(no style extracted)"),
+        "",
+
+        # 6) User extras
+        "USER REQUESTS:",
+        (user_block or "(none)"),
     ]
-    if user_block.strip():
-        parts += ["", user_block]
     return "\n".join(parts)
 
 
