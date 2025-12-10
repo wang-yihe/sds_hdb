@@ -1,12 +1,12 @@
 import { useSelector, useDispatch } from "react-redux";
 import { useForm } from "react-hook-form";
-import { 
-    searchPlants, 
+import {
+    searchPlants,
     searchPlantsWithImages,
-    getPlantDetails, 
-    getExampleQueries, 
-    clearSearchResults, 
-    clearPlantDetails 
+    getPlantDetails,
+    getExampleQueries,
+    clearSearchResults,
+    clearPlantDetails
 } from "@/store/slices/ragSlice";
 
 export const useRag = () => {
@@ -36,9 +36,11 @@ export const useRag = () => {
 
     const handleSearchPlantsWithImages = async (searchData) => {
         try {
-            await dispatch(searchPlantsWithImages(searchData)).unwrap();
+            const result = await dispatch(searchPlantsWithImages(searchData)).unwrap();
+            return result; // Return the result so callers can use it immediately
         } catch (error) {
             alert("Failed to search plants with images: " + error);
+            throw error;
         }
     };
 
@@ -85,14 +87,14 @@ export const useRag = () => {
         exampleQueries,
         loadingFlags,
         hasResults,
-        
+
         // Form controls
         register,
         handleSubmit,
         errors,
         watch,
         setValue,
-        
+
         // Actions
         handleSearchPlants,
         handleSearchPlantsWithImages,

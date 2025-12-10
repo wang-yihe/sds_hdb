@@ -11,7 +11,6 @@ const AIHelper = (props) => {
   const [plantSearch, setPlantSearch] = useState("");
   const [isHovered, setIsHovered] = useState(false);
   const { handleSearchPlantsWithImages, searchResults, loadingFlags } = useRag();
-  const [plantSearchResults, setPlantSearchResults] = useState([]);
 
   const handleImageUpload = (e, type) => {
     const files = Array.from(e.target.files || []);
@@ -41,8 +40,6 @@ const AIHelper = (props) => {
         query: plantSearch, 
         max_results: 5 
       });
-      console.log('Search results:', searchResults);
-      setPlantSearchResults(searchResults);
     } catch (error) {
       console.error('Plant search failed:', error);
       alert('Plant search failed: ' + error.message);
@@ -588,7 +585,7 @@ const AIHelper = (props) => {
               )}
 
               {/* Plant Results Grid */}
-              {!loadingFlags.isSearching && plantSearchResults.length > 0 && (
+              {!loadingFlags.isSearching && searchResults.length > 0 && (
                 <div style={{ 
                   display: 'grid', 
                   gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', 
@@ -601,7 +598,7 @@ const AIHelper = (props) => {
                   border: '1px solid #e5e7eb',
                   marginBottom: '12px'
                 }}>
-                  {plantSearchResults.map((plant, index) => {
+                  {searchResults.map((plant, index) => {
                     const isSelected = selectedPlants.some(p => p.botanical_name === plant.botanical_name);
                     return (
                       <div

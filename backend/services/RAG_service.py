@@ -287,14 +287,17 @@ def check_existing_image(botanical_name: str) -> Optional[str]:
 
 
 def build_image_prompt(botanical_name: str) -> str:
-    """Build prompt for OpenAI image generation"""
+    """Build prompt for OpenAI image generation - general purpose for any plant type"""
     return (
-        f"Generate a realistic, botanically accurate image of the species '{botanical_name}'. "
-        f"Show a full-grown mature tree with full canopy, trunk, branching structure, "
-        f"correct leaf arrangement, bark details, and accurate proportions. "
-        f"Isolate the tree on a completely transparent background suitable for a PNG file. "
-        f"No shadows, no floor, no gradients, no sky, no textures around the tree. "
-        f"Produce a clean silhouette with no artifacts."
+        f"Generate a realistic, botanically accurate image of the plant species '{botanical_name}'. "
+        f"Show the plant at full maturity with its characteristic growth form. "
+        f"Include accurate details: growth habit (tree/shrub/palm/groundcover/climber), "
+        f"stem/trunk structure, branching pattern, leaf arrangement and shape, "
+        f"bark or stem texture, flowers or fruits if distinctive, and correct proportions. "
+        f"Capture the plant's natural form and identifying features. "
+        f"Isolate the plant on a completely transparent background suitable for a PNG file. "
+        f"No shadows, no ground, no gradients, no sky, no background elements. "
+        f"Produce a clean, professional botanical illustration style silhouette with no artifacts."
     )
 
 
