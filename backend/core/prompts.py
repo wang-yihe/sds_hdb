@@ -20,15 +20,18 @@ from utils.ai_helper import gpt_vision_summarize, b64_to_data_url
 
 _STYLE_SYS_MSG = (
     "You assist a professional landscape architect. You will receive:\n"
-    "- One PERSPECTIVE image (base canvas to preserve)\n"
-    "- STYLE REFERENCE images (same style theme)\n"
+    "- One PERSPECTIVE image (defines EXISTING hardscape layout - buildings, planters, tiles, railings)\n"
+    "- STYLE REFERENCE images (for MOOD/PALETTE/TEXTURE inspiration only - ignore their layouts/structures)\n"
     "- PLANT REFERENCE images (same species, multiple views)\n\n"
+    "CRITICAL: The PERSPECTIVE image's hardscape (buildings, planters, tiles, paths) is FIXED and MUST be preserved exactly.\n"
+    "Style references provide ONLY visual mood, color palette, and planting style - DO NOT extract their layouts, paths, or structures.\n\n"
     "Return TWO concise labeled blocks ONLY:\n"
     "[STYLE]\n"
-    "• Layout logic (formal vs naturalistic; symmetry/asymmetry)\n"
-    "• Planting density & massing (grouping, repetition)\n"
-    "• Colour palette & overall atmosphere\n"
-    "• Recurring shapes/edges (linear, curved, clipped hedges)\n\n"
+    "• Planting style (formal/naturalistic grouping; dense vs sparse)\n"
+    "• Planting density & massing (grouping patterns, repetition)\n"
+    "• Colour palette & atmosphere (foliage colors, lighting mood)\n"
+    "• Foliage texture & character (glossy/matte, fine/bold, clipped/natural)\n"
+    "DO NOT mention paths, boardwalks, circulation, or any hardscape elements from style references.\n\n"
     "[PLANT_SPECIES]\n"
     "• Likely species name (or 'Unknown species (describe)')\n"
     "• Key visible morphology (height, trunk/crownshaft, frond/leaf shape, texture, colour)\n"
@@ -82,10 +85,11 @@ def build_style_and_species_blocks(
 
     content: List[Dict] = []
 
-    # Perspective (context; not analyzed line-by-line, but helps judge lighting/feel)
+    # Perspective (PRIMARY - sets hardscape layout)
     content += [
-        {"type": "text", "text": "PERSPECTIVE (context for scale/lighting):"},
+        {"type": "text", "text": "PERSPECTIVE IMAGE (PRIMARY - defines FIXED hardscape: buildings, planters, tiles, railings, paths):"},
         {"type": "image_url", "image_url": {"url": b64_to_data_url(base_image_b64)}},
+        {"type": "text", "text": "This layout is LOCKED. All hardscape elements must be preserved exactly."},
     ]
 
     if species_hint:
@@ -95,12 +99,12 @@ def build_style_and_species_blocks(
         })
 
     if style_refs_b64:
-        content.append({"type": "text", "text": "STYLE REFERENCES (same style theme):"})
+        content.append({"type": "text", "text": "STYLE REFERENCES (SECONDARY - for mood/palette/texture ONLY, ignore their layouts/paths/structures):"})
         for b in style_refs_b64:
             content.append({"type": "image_url", "image_url": {"url": b64_to_data_url(b)}})
 
     if plant_refs_b64:
-        content.append({"type": "text", "text": "PLANT REFERENCES (same species, multiple angles):"})
+        content.append({"type": "text", "text": "PLANT REFERENCES (species morphology - same species, multiple angles):"})
         for b in plant_refs_b64:
             content.append({"type": "image_url", "image_url": {"url": b64_to_data_url(b)}})
 

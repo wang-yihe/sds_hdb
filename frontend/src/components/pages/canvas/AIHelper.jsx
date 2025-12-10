@@ -92,7 +92,6 @@ const AIHelper = (props) => {
       setPrompt("");
       setSelectedPlants([]);
       setPlantSearch("");
-      setPlantSearchResults([]); // ADD THIS - clear search results too
     } catch (error) {
       console.error('Generation failed:', error);
       alert('Failed to generate image');
