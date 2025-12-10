@@ -12,6 +12,7 @@ import { GENERATION_CARD_CONFIG } from '../../../config/generationcardconfig'
 import { createVideoCardAsShapes } from './VideoCard'
 import { useGenerateAllSmart } from '@/hooks/useAi'
 import { useRag } from '@/hooks/useRag'
+import { useVideoGeneration } from '@/hooks/useVideo'
 
 // Shape Util class for Generation Card
 export class GenerationCardShapeUtil extends ShapeUtil {
@@ -65,6 +66,7 @@ export class GenerationCardShapeUtil extends ShapeUtil {
     const editor = useEditor()
     const { generate } = useGenerateAllSmart()
     const { handleSearchPlantsWithImages, searchResults, loadingFlags } = useRag()
+    const { generate: generateVideo, loading: videoLoading, error: videoError } = useVideoGeneration()
     
     const [showComments, setShowComments] = useState(false)
     const [editMode, setEditMode] = useState(false)
@@ -351,24 +353,44 @@ export class GenerationCardShapeUtil extends ShapeUtil {
       setEditMode(false)
     }
 
-    const handleGenerateVideo = (e) => {
+    const handleGenerateVideo = async (e) => {
       e.stopPropagation()
-      
+
+      if (!generatedImage || generatedImage.includes('unsplash')) {
+        alert('Cannot generate video from placeholder image. Please generate an actual image first.')
+        return
+      }
+
+      if (videoLoading) {
+        return
+      }
+
       console.log('Generating video from generation:', generationNumber)
-      
-      const currentBounds = editor.getShapePageBounds(shape.id)
-      
-      // Position video card below current card
-      const newX = currentBounds.x
-      const newY = currentBounds.y + currentBounds.height + 50
-      
-      createVideoCardAsShapes(editor, {
-        position: { x: newX, y: newY },
-        generationNumber: generationNumber,
-        videoUrl: null, // Will be filled by API response
-        originalData: shape.props.originalData,
-        sourceGenerationId: shape.id,
-      })
+
+      try {
+        const result = await generateVideo({
+          image_b64: generatedImage,
+          prompt: shape.props.originalData?.prompt || ''
+        }).unwrap()
+
+        console.log('Video generation result:', result)
+
+        const currentBounds = editor.getShapePageBounds(shape.id)
+
+        const newX = currentBounds.x
+        const newY = currentBounds.y + currentBounds.height + 50
+
+        createVideoCardAsShapes(editor, {
+          position: { x: newX, y: newY },
+          generationNumber: generationNumber,
+          videoUrl: result.video_data,  // Use video_data (base64 data URI) directly
+          originalData: shape.props.originalData,
+          sourceGenerationId: shape.id,
+        })
+      } catch (err) {
+        console.error('Video generation failed:', err)
+        alert('Video generation failed: ' + (err.message || 'Unknown error'))
+      }
     }
 
     const startLasso = (e) => {
@@ -780,15 +802,15 @@ export class GenerationCardShapeUtil extends ShapeUtil {
             <div style={{ marginBottom: '16px' }}>
               <button
                 onPointerDown={handleGenerateVideo}
-                disabled={isGenerating}
+                disabled={isGenerating || videoLoading}
                 style={{
                   width: '100%',
                   padding: '12px',
-                  background: isGenerating ? '#e5e7eb' : 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                  background: (isGenerating || videoLoading) ? '#e5e7eb' : 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
-                  cursor: isGenerating ? 'not-allowed' : 'pointer',
+                  cursor: (isGenerating || videoLoading) ? 'not-allowed' : 'pointer',
                   fontSize: '14px',
                   fontWeight: '600',
                   display: 'flex',
@@ -796,12 +818,26 @@ export class GenerationCardShapeUtil extends ShapeUtil {
                   justifyContent: 'center',
                   gap: '8px',
                   transition: 'transform 0.2s',
-                  opacity: isGenerating ? 0.5 : 1
+                  opacity: (isGenerating || videoLoading) ? 0.5 : 1
                 }}
-                onMouseEnter={(e) => !isGenerating && (e.currentTarget.style.transform = 'scale(1.02)')}
+                onMouseEnter={(e) => !(isGenerating || videoLoading) && (e.currentTarget.style.transform = 'scale(1.02)')}
                 onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
               >
-                🎬 Generate Video
+                {videoLoading ? (
+                  <>
+                    <div style={{
+                      width: '16px',
+                      height: '16px',
+                      border: '2px solid rgba(255,255,255,0.3)',
+                      borderTop: '2px solid white',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite'
+                    }} />
+                    Generating Video...
+                  </>
+                ) : (
+                  <>🎬 Generate Video</>
+                )}
               </button>
             </div>
 
@@ -981,8 +1017,10 @@ export class GenerationCardShapeUtil extends ShapeUtil {
                               }}
                             >
                               {plant.image && (
-                                <img 
-                                  src={`data:image/png;base64,${plant.image}`}
+                                <img
+                                  src={plant.image.startsWith('/canvas-assets/') || plant.image.startsWith('http') || plant.image.startsWith('data:')
+                                    ? plant.image
+                                    : `data:image/png;base64,${plant.image}`}
                                   alt={plant.botanical_name}
                                   style={{
                                     width: '24px',

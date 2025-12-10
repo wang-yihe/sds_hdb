@@ -184,9 +184,26 @@ export class OriginalCardShapeUtil extends ShapeUtil {
                         borderRadius: `${ORIGINAL_CARD_CONFIG.radii.chip}px`,
                         fontSize: '12px',
                         color: ORIGINAL_CARD_CONFIG.colors.chipFg,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
                       }}
                     >
-                      🌱 {plant}
+                      {plant.image && (
+                        <img
+                          src={plant.image.startsWith('/canvas-assets/') || plant.image.startsWith('http') || plant.image.startsWith('data:')
+                            ? plant.image
+                            : `data:image/png;base64,${plant.image}`}
+                          alt={plant.botanical_name}
+                          style={{
+                            width: '16px',
+                            height: '16px',
+                            objectFit: 'cover',
+                            borderRadius: '3px',
+                          }}
+                        />
+                      )}
+                      🌱 {plant.botanical_name || plant}
                     </span>
                   ))}
                 </div>

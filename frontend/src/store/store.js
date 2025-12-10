@@ -8,6 +8,7 @@ import authReducer from "@/store/slices/authSlice";
 import projectReducer from "@/store/slices/projectSlice";
 import aiReducer from "@/store/slices/aiSlice";
 import ragReducer from "@/store/slices/ragSlice";
+import videoReducer from "@/store/slices/videoSlice";
 
 const rootReducer = combineReducers({
     rag: ragReducer,
@@ -17,6 +18,7 @@ const rootReducer = combineReducers({
     user: userReducer,
     project: projectReducer,
     auth: authReducer,
+    video: videoReducer,
 });
 
 const persistConfig = {

@@ -4,6 +4,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """Application settings for SDS HDB App."""
+    # Video Generation
+    video_storage_dir: str = "./storage/generated_videos"
+    video_generation_model: str = "models/veo-3.1-generate-preview"
     # RAG Configuration
     google_api_key: str = ""  # For Gemini LLM
     rag_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"

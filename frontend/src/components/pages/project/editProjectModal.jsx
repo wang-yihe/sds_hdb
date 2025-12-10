@@ -257,25 +257,32 @@ export default function EditProjectModal({
 
               {/* Collaborator List */}
               <div className="space-y-2">
-                {project.collaborator_ids && project.collaborator_ids.length > 0 ? (
+                {/* Check both collaborators array and collaborator_ids for backwards compatibility */}
+                {(project.collaborators && project.collaborators.length > 0) || (project.collaborator_ids && project.collaborator_ids.length > 0) ? (
                   <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {project.collaborator_ids.map((collaboratorId, index) => (
+                    {/* Prefer collaborators array if available, fallback to collaborator_ids */}
+                    {(project.collaborators && project.collaborators.length > 0
+                      ? project.collaborators
+                      : (project.collaborator_ids || []).map((id, index) => ({ id, email: `Loading...` }))
+                    ).map((collaborator, index) => (
                       <div
-                        key={collaboratorId}
+                        key={collaborator.id}
                         className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition"
                       >
                         <div className="flex items-center gap-3">
                           <Avatar className="h-10 w-10">
                             <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                              {getInitials(`user${index + 1}@example.com`)}
+                              {collaborator.email && collaborator.email !== 'Loading...'
+                                ? getInitials(collaborator.email)
+                                : (index + 1).toString()}
                             </AvatarFallback>
                           </Avatar>
                           <div>
                             <p className="text-sm font-medium">
-                              Collaborator {index + 1}
+                              {collaborator.email || `Collaborator ${index + 1}`}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              ID: {collaboratorId.substring(0, 8)}...
+                              ID: {collaborator.id.substring(0, 8)}...
                             </p>
                           </div>
                         </div>
@@ -283,8 +290,10 @@ export default function EditProjectModal({
                           type="button"
                           variant="ghost"
                           size="sm"
-                          onClick={() => onRemoveCollaborator(project.id, collaboratorId)}
-                          disabled={isLoading}
+                          onClick={() => collaborator.email && collaborator.email !== 'Loading...'
+                            ? onRemoveCollaborator(project.id, collaborator.email)
+                            : null}
+                          disabled={isLoading || !collaborator.email || collaborator.email === 'Loading...'}
                           className="hover:bg-destructive/10 hover:text-destructive"
                         >
                           <X className="h-4 w-4" />

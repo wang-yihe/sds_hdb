@@ -53,9 +53,11 @@ async def add_collaborator(
 @app.delete("/{project_id}/remove_collaborator", response_model=ProjectResponse)
 async def remove_collaborator(
     project_id: str,
-    collaborator_data: CollaboratorAdd,
+    email: str,
     current_user: dict = Depends(get_current_user)
 ):
+    # Create CollaboratorAdd object from query parameter for controller compatibility
+    collaborator_data = CollaboratorAdd(email=email)
     return await controller.remove_collaborator(project_id, collaborator_data, current_user)
 
 @app.post("/upload_thumbnail/{project_id}")

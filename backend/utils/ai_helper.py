@@ -101,7 +101,7 @@ def b64_to_data_url(b64_str: str, mime: str = "image/png") -> str:
 # GPT-4o Vision (reads images → text)
 # ---------------------------
 
-def gpt_vision_summarize(messages: list, model: str = "gpt-5-nano", max_tokens: int = 500) -> str:
+def gpt_vision_summarize(messages: list, model: str = "gpt-5.1", max_tokens: int = 500) -> str:
     """
     Call Chat Completions with vision content.
     messages example:
