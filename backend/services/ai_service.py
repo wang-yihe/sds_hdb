@@ -76,10 +76,8 @@ class AIService:
     async def generate_all_smart(body: GenerateAllSmartBody):
         try:
             # Use the first style image or first perspective image as base
-            base_image = body.styleImages[0] if body.styleImages else (
-                body.perspectiveImages[0] if body.perspectiveImages else ""
-            )
-            
+            base_image = body.perspectiveImages[0]
+            print("base image base64", base_image)
             if not base_image:
                 raise ValueError("No base image provided")
             

@@ -71,10 +71,10 @@ const AIHelper = (props) => {
     setIsGenerating(true);
     try {
       const generationData = {
-        styleImages,
         perspectiveImages,
+        styleImages,
+        selectedPlants, // Now contains [{botanical_name, image}, ...]
         prompt,
-        selectedPlants // Now contains [{botanical_name, image}, ...]
       };
 
       // Call parent component's onGenerate callback
