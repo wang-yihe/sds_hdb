@@ -5,7 +5,7 @@ import logging
 
 from controllers.rag_controller import rag_controller
 from core.config import get_settings
-from schemas.rag_schema import (
+from schemas.RAG_schema import (
     PlantSearchResponse,
     PlantDetailsResponse,
     DatabaseStatusResponse,

@@ -11,4 +11,16 @@ const generateAllSmart = async (generationForm) => {
     }
 };
 
-export default { generateAllSmart };    
+const editLasso = async (editData) => {
+    try {
+        const response = await axiosInstance.post("/ai/edit_lasso", editData);
+        console.log("Lasso edit response:", response);
+        return response;
+    } catch (error) {
+        const errorMessage = error?.response?.data?.message || error.message || error;
+        throw new Error(errorMessage);
+    }
+};
+
+export default { generateAllSmart, editLasso };
+

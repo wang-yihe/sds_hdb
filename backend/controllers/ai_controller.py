@@ -1,5 +1,5 @@
 from services.ai_service import AIService
-from schemas.ai_schema import AnalyzeBody, DragPlaceBody, GenerateAllSmartBody, MaskFromGreenBody, PreviewMaskBody, Stage1Body, Stage2Body, Stage3Body
+from schemas.ai_schema import AnalyzeBody, DragPlaceBody, EditLassoReq, GenerateAllSmartBody, MaskFromGreenBody, PreviewMaskBody, Stage1Body, Stage2Body, Stage3Body
 from fastapi import HTTPException, status
 
 class AIController:
@@ -96,5 +96,15 @@ class AIController:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error generating masks from green overlay: {str(e)}"
+            )
+            
+    @staticmethod
+    async def edit_lasso(body:EditLassoReq):
+        try:
+            return await AIService.edit_lasso(body)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error in lasso edit: {str(e)}"
             )
             

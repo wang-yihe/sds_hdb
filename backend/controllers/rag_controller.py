@@ -2,7 +2,7 @@ from typing import Optional, Dict, Any
 import logging
 from fastapi import HTTPException
 
-from services.rag_service import (
+from services.RAG_service import (
     search_plants as service_search_plants,
     search_plants_with_images as service_search_plants_with_images,
     get_plant_details as service_get_plant_details,

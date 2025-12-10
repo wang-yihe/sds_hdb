@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from controllers.ai_controller import AIController
-from schemas.ai_schema import AnalyzeBody, DragPlaceBody, GenerateAllSmartBody, MaskFromGreenBody, PreviewMaskBody, Stage1Body, Stage2Body, Stage3Body
+from schemas.ai_schema import AnalyzeBody, DragPlaceBody, EditLassoReq, GenerateAllSmartBody, MaskFromGreenBody, PreviewMaskBody, Stage1Body, Stage2Body, Stage3Body
 
 app = APIRouter()
 controller = AIController()
@@ -41,5 +41,7 @@ async def preview_mask(body: PreviewMaskBody):
 async def mask_from_green(body: MaskFromGreenBody):
     return await controller.mask_from_green(body)
 
-
+@app.post("/edit_lasso")
+async def edit_lasso(body: EditLassoReq):
+    return await controller.edit_lasso(body)
 

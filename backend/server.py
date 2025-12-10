@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import logging
 
-from services.rag_service import init_chroma
+from services.RAG_service import init_chroma
 from core.config import get_settings
 from db.db import connect_to_db, close_db_connection
 from routes.main_router import main_router 

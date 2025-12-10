@@ -10,9 +10,10 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { GENERATION_CARD_CONFIG } from '../../../config/generationcardconfig'
 import { createVideoCardAsShapes } from './VideoCard'
-import { useGenerateAllSmart } from '@/hooks/useAi'
+import { useGenerateAllSmart, useEditLasso } from '@/hooks/useAi'
 import { useRag } from '@/hooks/useRag'
 import { useVideoGeneration } from '@/hooks/useVideo'
+import { lassoPointsToMask, stripDataUriPrefix } from '@/utils/maskUtils'
 
 // Shape Util class for Generation Card
 export class GenerationCardShapeUtil extends ShapeUtil {
@@ -65,6 +66,7 @@ export class GenerationCardShapeUtil extends ShapeUtil {
     
     const editor = useEditor()
     const { generate } = useGenerateAllSmart()
+    const { edit: editLasso, loading: lassoLoading } = useEditLasso()
     const { handleSearchPlantsWithImages, searchResults, loadingFlags } = useRag()
     const { generate: generateVideo, loading: videoLoading, error: videoError } = useVideoGeneration()
     
@@ -301,24 +303,55 @@ export class GenerationCardShapeUtil extends ShapeUtil {
 
     const handleRegenerate = async () => {
       if (lassoPoints.length === 0 && !regenerationPrompt.trim()) return
-      
+
       console.log('Regenerating with:', {
         generationNumber,
         lassoPoints,
         regenerationPrompt: regenerationPrompt.trim(),
         originalData: shape.props.originalData
       })
-      
+
       // Create a new generation card with incremented generation number
       const newGenerationNumber = generationNumber + 1
       const currentBounds = editor.getShapePageBounds(shape.id)
-      
+
       // Position new card to the right of current card
       const newX = currentBounds.x + currentBounds.width + GENERATION_CARD_CONFIG.newCardOffset.x
       const newY = currentBounds.y + GENERATION_CARD_CONFIG.newCardOffset.y
-      
+
       const cardId = createShapeId(GENERATION_CARD_CONFIG.createCardId())
-      
+
+      // If lasso points exist, call edit_lasso API
+      let editedImagePath = generatedImage || ''
+
+      if (lassoPoints.length > 2 && imageRef.current) {
+        try {
+          // Get image dimensions
+          const imgWidth = imageRef.current.naturalWidth
+          const imgHeight = imageRef.current.naturalHeight
+
+          // Convert lasso points to mask
+          const maskB64 = await lassoPointsToMask(lassoPoints, imgWidth, imgHeight)
+
+          // Strip data URI prefix from image
+          const imageB64 = stripDataUriPrefix(generatedImage)
+
+          // Call edit_lasso API
+          const result = await editLasso({
+            image_b64: imageB64,
+            mask_b64: maskB64,
+            prompt: regenerationPrompt.trim() || 'Edit the selected area',
+          })
+
+          if (result.payload && !result.error) {
+            editedImagePath = result.payload // This will be the resultPath like "/ai/file/lasso_edit_<uuid>.png"
+          }
+        } catch (error) {
+          console.error('Lasso edit failed:', error)
+          // Fall back to original image if edit fails
+        }
+      }
+
       editor.createShapes([{
         id: cardId,
         type: 'generationCard',
@@ -328,7 +361,7 @@ export class GenerationCardShapeUtil extends ShapeUtil {
           w: GENERATION_CARD_CONFIG.defaultSize.w,
           h: GENERATION_CARD_CONFIG.defaultSize.h,
           generationNumber: newGenerationNumber,
-          generatedImage: generatedImage || '', // Will be filled by AI generation
+          generatedImage: editedImagePath,
           likes: 0,
           comments: [],
           timestamp: GENERATION_CARD_CONFIG.defaultTimestamp(),
@@ -339,13 +372,13 @@ export class GenerationCardShapeUtil extends ShapeUtil {
             selectedPlants: selectedPlants
           },
           parentGenerationId: shape.id,
-          isGenerating: false, // Will trigger on mount
+          isGenerating: lassoLoading, // Show loading if lasso edit is in progress
           error: '',
         },
       }])
-      
+
       editor.select(cardId)
-      
+
       // Clear lasso and prompt after creating new generation
       clearLasso()
       setRegenerationPrompt('')
@@ -1118,20 +1151,21 @@ export class GenerationCardShapeUtil extends ShapeUtil {
                     e.stopPropagation()
                     handleRegenerate()
                   }}
-                  disabled={lassoPoints.length === 0 && !regenerationPrompt.trim()}
+                  disabled={lassoLoading || (lassoPoints.length === 0 && !regenerationPrompt.trim())}
                   style={{
                     marginTop: '8px',
                     padding: '8px 16px',
-                    background: (lassoPoints.length === 0 && !regenerationPrompt.trim()) ? '#9ca3af' : GENERATION_CARD_CONFIG.colors.primary,
+                    background: (lassoLoading || (lassoPoints.length === 0 && !regenerationPrompt.trim())) ? '#9ca3af' : GENERATION_CARD_CONFIG.colors.primary,
                     color: GENERATION_CARD_CONFIG.colors.headerText,
                     border: 'none',
                     borderRadius: '6px',
-                    cursor: (lassoPoints.length === 0 && !regenerationPrompt.trim()) ? 'not-allowed' : 'pointer',
+                    cursor: (lassoLoading || (lassoPoints.length === 0 && !regenerationPrompt.trim())) ? 'not-allowed' : 'pointer',
                     fontSize: '13px',
-                    fontWeight: '500'
+                    fontWeight: '500',
+                    opacity: lassoLoading ? 0.7 : 1
                   }}
                 >
-                  🔄 Regenerate
+                  {lassoLoading ? '⏳ Regenerating...' : '🔄 Regenerate'}
                 </button>
               </div>
             )}

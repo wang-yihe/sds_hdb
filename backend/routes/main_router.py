@@ -8,7 +8,7 @@ from sub_routes.canvas_routes import app as canvas_router
 from sub_routes.user_routes import app as user_router
 from sub_routes.ai_routes import app as ai_router
 from sub_routes.project_routes import app as project_router
-from sub_routes.rag_routes import app as rag_router
+from sub_routes.RAG_routes import app as rag_router
 from sub_routes.video_generation_routes import app as video_generation_router
 # Create main router
 main_router = APIRouter()

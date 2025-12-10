@@ -89,3 +89,14 @@ class DragPlaceBody(BaseModel):
     drop_y: int
     radius_px: int = 80
     size: str = "1024x1024"
+
+
+class EditLassoReq(BaseModel):
+    """
+    Edit a specific region of an image defined by a lasso selection.
+    The mask defines the editable area (WHITE=edit, BLACK=preserve).
+    """
+    image_b64: str
+    mask_b64: str
+    prompt: Optional[str] = None
+    size: Optional[str] = None

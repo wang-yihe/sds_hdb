@@ -27,6 +27,29 @@ export const generateAllSmart = createAsyncThunk(
   }
 );
 
+export const editLasso = createAsyncThunk(
+  'ai/editLasso',
+  async (payload, { rejectWithValue }) => {
+    try {
+      const response = await aiAPI.editLasso(payload);
+
+      // Response contains the base64 data URI image (matching generate_all_smart pattern)
+      const finalImageSrc = response.data.image;
+
+      if (!finalImageSrc || typeof finalImageSrc !== 'string' || finalImageSrc.length < 50) {
+        throw new Error('API returned empty or invalid image source.');
+      }
+
+      console.log('Lasso edit successful');
+      return finalImageSrc;
+
+    } catch (error) {
+      console.error('Lasso edit failed:', error);
+      return rejectWithValue(error.response?.data?.detail || error.message);
+    }
+  }
+);
+
 const aiSlice = createSlice({
     name: 'ai',
     initialState: {
@@ -56,6 +79,18 @@ const aiSlice = createSlice({
                 state.generatedContent = action.payload;
             })
             .addCase(generateAllSmart.rejected, (state, action) => {
+                state.loading = false;
+                state.error = action.payload;
+            })
+            .addCase(editLasso.pending, (state) => {
+                state.loading = true;
+                state.error = null;
+            })
+            .addCase(editLasso.fulfilled, (state, action) => {
+                state.loading = false;
+                state.generatedContent = action.payload;
+            })
+            .addCase(editLasso.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload;
             });
